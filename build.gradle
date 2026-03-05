@@ -1,0 +1,76 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.80'
+}
+
+base {
+    archivesName = "${modid}-${mcVersion}"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(project.properties.javaVersion)
+
+neoForge {
+    version = project.properties.forgeVersion
+
+    parchment {
+        def split = "${parchmentVersion}".split('-')
+        minecraftVersion = split[1]
+        mappingsVersion = split[0]
+    }
+
+    mods {
+        create("${modid}") {
+            sourceSet project.sourceSets.main
+        }
+    }
+
+    runs {
+        configureEach {
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+
+        client {
+            client()
+            ideName = "${project.name} - Client"
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            ideName = "${project.name} - Server"
+        }
+    }
+}
+
+repositories {
+    mavenLocal()
+}
+
+dependencies {
+    // No external dependencies
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [version: version]
+    inputs.properties replaceProperties
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+            "Specification-Title"     : project.modName,
+            "Specification-Version"   : project.version,
+            "Implementation-Title"    : project.modName,
+            "Implementation-Version"  : project.version,
+            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+}

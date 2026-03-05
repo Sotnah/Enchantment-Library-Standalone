@@ -1,0 +1,23 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "enchantmentlibrary"
+version = "${version}"
+displayName = "Enchantment Library (Standalone)"
+description = '''A standalone Enchantment Library block that stores and extracts enchantments.'''
+
+[[dependencies.enchantmentlibrary]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.enchantmentlibrary]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,)"
+ordering = "NONE"
+side = "BOTH"

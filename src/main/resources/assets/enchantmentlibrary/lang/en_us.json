@@ -1,0 +1,15 @@
+{
+  "block.enchantmentlibrary.library_tier1": "Enchantment Library (Tier 1)",
+  "block.enchantmentlibrary.library_tier2": "Enchantment Library (Tier 2)",
+  "block.enchantmentlibrary.library_tier3": "Enchantment Library (Tier 3)",
+  "itemGroup.enchantmentlibrary": "Enchantment Library",
+  "container.enchantmentlibrary.library": "Enchantment Library",
+  "tooltip.enchlib.capacity": "Level Capacity: %s",
+  "tooltip.enchlib.max_lvl": "Max Available Level: %s",
+  "tooltip.enchlib.points": "Stored Points: %s/%s",
+  "tooltip.enchlib.unavailable": "Next Level Unavailable",
+  "tooltip.enchlib.extracting": "Extracting Level %s",
+  "tooltip.enchlib.cost": "Point Cost: %s",
+  "tooltip.enchlib.item": "Storing %d enchantments",
+  "tooltip.enchlib.nfilt": "Name Filter"
+}

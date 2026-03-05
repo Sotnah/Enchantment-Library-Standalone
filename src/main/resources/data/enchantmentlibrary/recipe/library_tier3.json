@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [" N ", "OBO", " H "],
+  "key": {
+    "N": { "item": "minecraft:netherite_block" },
+    "O": { "item": "minecraft:echo_shard" },
+    "B": { "item": "enchantmentlibrary:library_tier2" },
+    "H": { "item": "minecraft:heavy_core" }
+  },
+  "result": {
+    "id": "enchantmentlibrary:library_tier3",
+    "count": 1
+  }
+}

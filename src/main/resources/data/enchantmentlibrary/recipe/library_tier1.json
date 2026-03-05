@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["SES", "CBC", "SRS"],
+  "key": {
+    "S": { "item": "minecraft:stone_bricks" },
+    "E": { "item": "minecraft:emerald_block" },
+    "C": { "item": "minecraft:end_crystal" },
+    "B": { "item": "minecraft:bookshelf" },
+    "R": { "item": "minecraft:ender_chest" }
+  },
+  "result": {
+    "id": "enchantmentlibrary:library_tier1",
+    "count": 1
+  }
+}

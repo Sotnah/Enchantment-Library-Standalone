@@ -1,0 +1,47 @@
+# Gradle
+.gradle/
+build/
+bin/
+out/
+local.properties
+.nb-gradle/
+
+# IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+.eclipse/
+.recommenders/
+
+# Java & Misc logs
+hs_err_pid*
+replay_pid*
+*.log
+build_log.txt
+
+# Minecraft run directory
+run/
+!run/server.properties
+!run/eula.txt
+
+# Python (due to presence of tree.py)
+__pycache__/
+*.py[cod]
+*$py.class
+tree_utf8.txt
+tree.py
+
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+.agent/

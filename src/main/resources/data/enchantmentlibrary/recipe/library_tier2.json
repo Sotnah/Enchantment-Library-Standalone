@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [" D ", "XLX", " T "],
+  "key": {
+    "D": { "item": "minecraft:diamond_block" },
+    "X": { "item": "minecraft:experience_bottle" },
+    "L": { "item": "enchantmentlibrary:library_tier1" },
+    "T": { "item": "minecraft:nether_star" }
+  },
+  "result": {
+    "id": "enchantmentlibrary:library_tier2",
+    "count": 1
+  }
+}
