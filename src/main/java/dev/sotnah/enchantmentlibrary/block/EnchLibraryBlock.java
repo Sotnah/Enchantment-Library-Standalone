@@ -110,6 +110,9 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     @SuppressWarnings("null")
     protected InteractionResult useWithoutItem(@Nonnull BlockState state, @Nonnull Level level, @Nonnull BlockPos pos,
             @Nonnull Player player, @Nonnull BlockHitResult hit) {
+        if (player.isSpectator()) {
+            return InteractionResult.CONSUME;
+        }
         if (!level.isClientSide) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) {
@@ -128,7 +131,8 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof EnchLibraryBlockEntity) {
             return new SimpleMenuProvider(
-                    (containerId, inv, player) -> new EnchLibraryMenu(containerId, inv, pos),
+                    (containerId, inv, player) -> player.isSpectator() ? null
+                            : new EnchLibraryMenu(containerId, inv, pos),
                     NAME);
         }
         return null;
@@ -152,8 +156,12 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     @Nonnull
     public ItemStack getCloneItemStack(@Nonnull BlockState state, @Nonnull HitResult target, @Nonnull LevelReader level,
             @Nonnull BlockPos pos, @Nonnull Player player) {
-        ItemStack stack = new ItemStack(this);
         BlockEntity be = level.getBlockEntity(pos);
+        if (be == null) {
+            return new ItemStack(this);
+        }
+
+        ItemStack stack = new ItemStack(this);
         saveDataToItem(stack, be);
         return stack;
     }

@@ -44,9 +44,16 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         this.level = playerInv.player.level();
         this.player = playerInv.player;
         net.minecraft.world.level.block.entity.BlockEntity be = this.level.getBlockEntity(pos);
-        this.tile = be instanceof EnchLibraryBlockEntity ? (EnchLibraryBlockEntity) be : null;
-        if (this.tile != null) {
+        if (be instanceof EnchLibraryBlockEntity lib) {
+            this.tile = lib;
             this.tile.activeMenus.add(this);
+        } else {
+            this.tile = null;
+            if (!this.level.isClientSide) {
+                // Fallback: log warning (Adım 2)
+                System.err.println(
+                        "[EnchantmentLibrary] Warning: EnchLibraryMenu created with null/invalid tile at " + pos);
+            }
         }
         initSlots(playerInv);
     }
@@ -54,8 +61,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     // Client-side constructor (from network)
     // Suppressed: vanilla FriendlyByteBuf.readBlockPos() lacks @Nonnull
     @SuppressWarnings("null")
-    public EnchLibraryMenu(int containerId, @Nonnull Inventory playerInv, @Nonnull FriendlyByteBuf buf) {
-        this(containerId, playerInv, buf.readBlockPos());
+    public EnchLibraryMenu(int containerId, @Nonnull Inventory playerInv, @Nullable FriendlyByteBuf buf) {
+        this(containerId, playerInv, buf != null ? buf.readBlockPos() : BlockPos.ZERO);
     }
 
     // Suppressed: vanilla Slot/Container constructors and
@@ -143,6 +150,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(@Nonnull Player player) {
+        if (player.isSpectator())
+            return false; // Adım 1: Spectator kontrolü
         if (this.tile == null || this.tile.isRemoved())
             return false;
         return player.distanceToSqr(this.tile.getBlockPos().getX() + 0.5,
