@@ -105,7 +105,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         this.addSlot(new Slot(this.ioInv, OUTPUT_SLOT, 142, 106) {
             @Override
             public boolean mayPlace(@Nonnull ItemStack stack) {
-                return stack.is(Items.ENCHANTED_BOOK);
+                return false;
             }
 
             @Override
