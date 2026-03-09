@@ -51,7 +51,11 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     @SuppressWarnings("null")
     public EnchLibraryBlock(@Nonnull Supplier<? extends BlockEntityType<? extends EnchLibraryBlockEntity>> tileType,
             int maxLevel) {
-        super(BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_RED).strength(5.0F, 1200.0F));
+        super(BlockBehaviour.Properties.of()
+                .mapColor(MapColor.COLOR_RED)
+                .strength(maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.maxLevel ? 5.0F
+                        : (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.maxLevel ? 4.0F : 3.0F), 1200.0F)
+                .requiresCorrectToolForDrops());
         this.tileType = tileType;
         this.maxLevel = maxLevel;
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
