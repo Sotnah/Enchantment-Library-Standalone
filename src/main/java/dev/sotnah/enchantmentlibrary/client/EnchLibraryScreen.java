@@ -173,19 +173,29 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
             tooltip.add(Component.translatable("tooltip.enchlib.max_lvl",
                     Component.translatable("enchantment.level." + hovered.maxLevel)).withStyle(ChatFormatting.GRAY));
 
-            // Cost for next level
+            // Cost calculation (next level or max possible if Shift is held)
             ItemStack output = this.menu.getSlot(1).getItem();
             int currentLevel = output.isEmpty() ? 0
                     : EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(hovered.ench);
-            int nextLevel = currentLevel + 1;
 
-            if (tile.canExtract(hovered.ench, nextLevel, currentLevel)) {
-                long cost = EnchLibraryBlockEntity.levelToPoints(nextLevel)
+            int targetLevel;
+            if (Screen.hasShiftDown()) {
+                targetLevel = currentLevel;
+                while (targetLevel + 1 <= hovered.maxLevel
+                        && tile.canExtract(hovered.ench, targetLevel + 1, currentLevel)) {
+                    targetLevel++;
+                }
+            } else {
+                targetLevel = currentLevel + 1;
+            }
+
+            if (targetLevel > currentLevel && tile.canExtract(hovered.ench, targetLevel, currentLevel)) {
+                long totalCost = EnchLibraryBlockEntity.levelToPoints(targetLevel)
                         - EnchLibraryBlockEntity.levelToPoints(currentLevel);
                 tooltip.add(Component.translatable("tooltip.enchlib.extracting",
-                        Component.translatable("enchantment.level." + nextLevel)).withStyle(ChatFormatting.GREEN));
+                        Component.translatable("enchantment.level." + targetLevel)).withStyle(ChatFormatting.GREEN));
                 tooltip.add(Component.translatable("tooltip.enchlib.cost",
-                        format(cost)).withStyle(ChatFormatting.GREEN));
+                        format(totalCost)).withStyle(ChatFormatting.GREEN));
             } else {
                 tooltip.add(Component.translatable("tooltip.enchlib.unavailable").withStyle(ChatFormatting.RED));
             }
