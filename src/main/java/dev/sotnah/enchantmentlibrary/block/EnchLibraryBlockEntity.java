@@ -139,6 +139,41 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         return this.points.getLong(ench) >= cost;
     }
 
+    /**
+     * Refunds an enchantment level (or points) from an item back into the library.
+     */
+    public void refundEnchant(@Nonnull Holder<Enchantment> ench, @Nonnull ItemStack stack, boolean all) {
+        ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(stack);
+        int currentLevel = enchantments.getLevel(ench);
+        if (currentLevel <= 0)
+            return;
+
+        int nextLevel;
+        if (all) {
+            nextLevel = 0;
+        } else {
+            nextLevel = currentLevel - 1;
+        }
+
+        long refundAmount = levelToPoints(currentLevel) - levelToPoints(nextLevel);
+
+        long newPoints = this.points.getLong(ench) + refundAmount;
+        if (newPoints < 0L)
+            newPoints = this.maxPoints; // overflow guard
+        this.points.put(ench, Math.min(this.maxPoints, newPoints));
+
+        // Update the book's enchantments
+        ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(enchantments);
+        if (nextLevel > 0) {
+            mutable.set(ench, nextLevel);
+        } else {
+            mutable.removeIf(h -> h.equals(ench));
+        }
+        EnchantmentHelper.setEnchantments(stack, mutable.toImmutable());
+
+        this.markUpdated();
+    }
+
     public static long levelToPoints(int level) {
         if (level <= 0)
             return 0L;

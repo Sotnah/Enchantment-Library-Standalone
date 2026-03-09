@@ -20,6 +20,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 
 public class EnchLibraryMenu extends AbstractContainerMenu {
@@ -112,6 +113,12 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             public int getMaxStackSize() {
                 return 1;
             }
+
+            @Override
+            public void setChanged() {
+                super.setChanged();
+                EnchLibraryMenu.this.onChanged();
+            }
         });
 
         // Slot 2: Item filter slot (any item, used to filter visible enchantments)
@@ -168,8 +175,20 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         if (this.tile == null)
             return false;
 
+        // Restore button (0x7FFFFFFE) - Returns the item in output slot to the library
+        if (id == 0x7FFFFFFE) {
+            ItemStack outputSlotItem = this.ioInv.getItem(OUTPUT_SLOT);
+            if (!outputSlotItem.isEmpty() && outputSlotItem.is(Items.ENCHANTED_BOOK)) {
+                this.tile.depositBook(outputSlotItem);
+                this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+                return true;
+            }
+            return false;
+        }
+
         boolean shift = (id & 0x80000000) != 0;
-        int enchId = id & 0x7FFFFFFF;
+        boolean ctrl = (id & 0x40000000) != 0;
+        int enchId = id & 0x3FFFFFFF;
 
         var registry = this.level.registryAccess()
                 .registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
@@ -177,10 +196,25 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         if (ench == null)
             return false;
 
-        ItemStack output = this.ioInv.getItem(1);
+        ItemStack output = this.ioInv.getItem(OUTPUT_SLOT);
+
+        // Refund logic (Ctrl or Shift+Ctrl)
+        if (ctrl) {
+            if (!output.isEmpty() && output.is(Items.ENCHANTED_BOOK)) {
+                this.tile.refundEnchant(ench, output, shift);
+
+                if (EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
+                    this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+                }
+
+                return true;
+            }
+            return false;
+        }
+
         if (output.isEmpty()) {
             output = new ItemStack(Items.ENCHANTED_BOOK);
-            this.ioInv.setItem(1, output);
+            this.ioInv.setItem(OUTPUT_SLOT, output);
         }
 
         this.tile.extractEnchant(ench, output, shift);
@@ -255,8 +289,17 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     public List<Object2LongMap.Entry<Holder<Enchantment>>> getPointsForDisplay() {
         if (this.tile == null)
             return List.of();
+
+        ItemStack outputStack = this.ioInv.getItem(OUTPUT_SLOT);
+        var outputEnchants = !outputStack.isEmpty() ? EnchantmentHelper.getEnchantmentsForCrafting(outputStack) : null;
+
         return this.tile.getPoints().object2LongEntrySet().stream()
-                .filter(e -> e.getLongValue() > 0L)
+                .filter(e -> {
+                    if (e.getLongValue() > 0L)
+                        return true;
+                    // Keep in list if it's currently in the output book
+                    return outputEnchants != null && outputEnchants.getLevel(e.getKey()) > 0;
+                })
                 .toList();
     }
 

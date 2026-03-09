@@ -79,6 +79,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         this.filter.setTextColor(FILTER_TEXT_COLOR);
         this.filter.setResponder(s -> this.containerChanged());
         this.addRenderableWidget(this.filter);
+
         this.containerChanged();
     }
 
@@ -94,6 +95,13 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     @Override
     public void render(@Nonnull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
         super.render(gfx, mouseX, mouseY, partialTick);
+
+        // Render highlight for the return button exactly like vanilla
+        if (mouseX >= this.leftPos + 141 && mouseX < this.leftPos + 157 && mouseY >= this.topPos + 48
+                && mouseY < this.topPos + 64) {
+            AbstractContainerScreen.renderSlotHighlight(gfx, this.leftPos + 141, this.topPos + 48, 0);
+        }
+
         this.renderTooltip(gfx, mouseX, mouseY);
     }
 
@@ -160,6 +168,24 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     protected void renderTooltip(@Nonnull GuiGraphics gfx, int mouseX, int mouseY) {
         super.renderTooltip(gfx, mouseX, mouseY);
 
+        // Restore button tooltip check
+        if (mouseX >= this.leftPos + 141 && mouseX < this.leftPos + 157 && mouseY >= this.topPos + 48
+                && mouseY < this.topPos + 64) {
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(Component.literal("Return Book"));
+
+            if (Screen.hasShiftDown()) {
+                tooltip.add(Component.literal("Deposits back the enchanted book in the ")
+                        .append(Component.literal("OUTPUT").withStyle(s -> s.withColor(0xFFAA00)))
+                        .append(Component.literal(" slot.")));
+            } else {
+                tooltip.add(Component.literal("Hold Shift for more information.").withStyle(ChatFormatting.GRAY));
+            }
+
+            gfx.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
+            return; // We return here to avoid overlapping tooltips.
+        }
+
         LibrarySlot hovered = this.getHoveredSlot(mouseX, mouseY);
         if (hovered != null) {
             EnchLibraryBlockEntity tile = this.menu.getTile();
@@ -173,31 +199,63 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
             tooltip.add(Component.translatable("tooltip.enchlib.max_lvl",
                     Component.translatable("enchantment.level." + hovered.maxLevel)).withStyle(ChatFormatting.GRAY));
 
+            if (hovered.points <= 0) {
+                tooltip.add(
+                        Component.translatable("tooltip.enchlib.extraction_unavailable").withStyle(ChatFormatting.RED));
+            }
+
             // Cost calculation (next level or max possible if Shift is held)
             ItemStack output = this.menu.getSlot(1).getItem();
             int currentLevel = output.isEmpty() ? 0
                     : EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(hovered.ench);
 
-            int targetLevel;
-            if (Screen.hasShiftDown()) {
-                targetLevel = currentLevel;
-                while (targetLevel + 1 <= hovered.maxLevel
-                        && tile.canExtract(hovered.ench, targetLevel + 1, currentLevel)) {
-                    targetLevel++;
+            boolean ctrl = Screen.hasControlDown();
+            boolean shift = Screen.hasShiftDown();
+
+            if (ctrl) {
+                if (currentLevel > 0) {
+                    int nextLevel = shift ? 0 : currentLevel - 1;
+                    long refundAmount = EnchLibraryBlockEntity.levelToPoints(currentLevel)
+                            - EnchLibraryBlockEntity.levelToPoints(nextLevel);
+
+                    if (shift) {
+                        tooltip.add(Component.translatable("tooltip.enchlib.removing")
+                                .withStyle(ChatFormatting.GREEN));
+                        tooltip.add(Component.translatable("tooltip.enchlib.total_refund", format(refundAmount))
+                                .withStyle(ChatFormatting.GREEN));
+                    } else {
+                        tooltip.add(Component.translatable("tooltip.enchlib.refunding",
+                                Component.translatable("enchantment.level." + currentLevel))
+                                .withStyle(ChatFormatting.GREEN));
+                        tooltip.add(Component.translatable("tooltip.enchlib.point_refund", format(refundAmount))
+                                .withStyle(ChatFormatting.GREEN));
+                    }
+                } else {
+                    tooltip.add(Component.literal("Not Enchanted").withStyle(ChatFormatting.RED));
                 }
             } else {
-                targetLevel = currentLevel + 1;
-            }
+                int targetLevel;
+                if (shift) {
+                    targetLevel = currentLevel;
+                    while (targetLevel + 1 <= hovered.maxLevel
+                            && tile.canExtract(hovered.ench, targetLevel + 1, currentLevel)) {
+                        targetLevel++;
+                    }
+                } else {
+                    targetLevel = currentLevel + 1;
+                }
 
-            if (targetLevel > currentLevel && tile.canExtract(hovered.ench, targetLevel, currentLevel)) {
-                long totalCost = EnchLibraryBlockEntity.levelToPoints(targetLevel)
-                        - EnchLibraryBlockEntity.levelToPoints(currentLevel);
-                tooltip.add(Component.translatable("tooltip.enchlib.extracting",
-                        Component.translatable("enchantment.level." + targetLevel)).withStyle(ChatFormatting.GREEN));
-                tooltip.add(Component.translatable("tooltip.enchlib.cost",
-                        format(totalCost)).withStyle(ChatFormatting.GREEN));
-            } else {
-                tooltip.add(Component.translatable("tooltip.enchlib.unavailable").withStyle(ChatFormatting.RED));
+                if (targetLevel > currentLevel && tile.canExtract(hovered.ench, targetLevel, currentLevel)) {
+                    long totalCost = EnchLibraryBlockEntity.levelToPoints(targetLevel)
+                            - EnchLibraryBlockEntity.levelToPoints(currentLevel);
+                    tooltip.add(Component.translatable("tooltip.enchlib.extracting",
+                            Component.translatable("enchantment.level." + targetLevel))
+                            .withStyle(ChatFormatting.GREEN));
+                    tooltip.add(Component.translatable("tooltip.enchlib.cost",
+                            format(totalCost)).withStyle(ChatFormatting.GREEN));
+                } else {
+                    tooltip.add(Component.translatable("tooltip.enchlib.unavailable").withStyle(ChatFormatting.RED));
+                }
             }
 
             gfx.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
@@ -210,6 +268,20 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     @SuppressWarnings("null")
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         this.scrolling = false;
+
+        // Restore button click
+        if (mouseX >= this.leftPos + 141 && mouseX < this.leftPos + 157 && mouseY >= this.topPos + 48
+                && mouseY < this.topPos + 64) {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0x7FFFFFFE);
+                if (this.minecraft.getSoundManager() != null) {
+                    this.minecraft.getSoundManager().play(
+                            net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                                    net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+                }
+            }
+            return true;
+        }
 
         // Scrollbar drag
         if (mouseX >= this.leftPos + 14 && mouseX < this.leftPos + 18 && mouseY >= this.topPos + 29
@@ -227,6 +299,8 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                 int id = registry.getId(libSlot.ench.value());
                 if (Screen.hasShiftDown())
                     id |= 0x80000000;
+                if (Screen.hasControlDown())
+                    id |= 0x40000000;
                 this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, id);
                 if (this.minecraft.getSoundManager() != null) {
                     this.minecraft.getSoundManager().play(

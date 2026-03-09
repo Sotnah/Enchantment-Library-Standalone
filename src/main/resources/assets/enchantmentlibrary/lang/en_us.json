@@ -11,5 +11,10 @@
   "tooltip.enchlib.extracting": "Extracting Level %s",
   "tooltip.enchlib.cost": "Point Cost: %s",
   "tooltip.enchlib.item": "Storing %d enchantments",
-  "tooltip.enchlib.nfilt": "Name Filter"
+  "tooltip.enchlib.nfilt": "Name Filter",
+  "tooltip.enchlib.refunding": "Refunding Level: %s",
+  "tooltip.enchlib.point_refund": "Point Refund: %s",
+  "tooltip.enchlib.removing": "Removing Enchantment",
+  "tooltip.enchlib.total_refund": "Total Refund: %s",
+  "tooltip.enchlib.extraction_unavailable": "Extraction Unavailable"
 }
