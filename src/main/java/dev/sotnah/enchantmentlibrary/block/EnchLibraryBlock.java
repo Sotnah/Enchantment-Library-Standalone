@@ -150,6 +150,12 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     // lack @Nonnull
     @SuppressWarnings("null")
     public List<ItemStack> getDrops(@Nonnull BlockState state, @Nonnull LootParams.Builder ctx) {
+        // Respect requiresCorrectToolForDrops(): only drop if the tool is appropriate
+        ItemStack tool = ctx.getOptionalParameter(LootContextParams.TOOL);
+        if (tool == null || !tool.isCorrectToolForDrops(state)) {
+            return List.of();
+        }
+
         ItemStack stack = new ItemStack(this);
         BlockEntity be = ctx.getParameter(LootContextParams.BLOCK_ENTITY);
         saveDataToItem(stack, be);
@@ -211,19 +217,6 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
                 list.add(Component.translatable("tooltip.enchlib.item", count).withStyle(ChatFormatting.GRAY));
             }
         }
-    }
-
-    // ── Block Entity Removal ───────────────────────────────────────────────────
-
-    @Override
-    // Suppressed: vanilla newState.getBlock() lacks @Nonnull
-    @SuppressWarnings("null")
-    protected void onRemove(@Nonnull BlockState state, @Nonnull Level level, @Nonnull BlockPos pos,
-            @Nonnull BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock())) {
-            level.removeBlockEntity(pos);
-        }
-        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     public int getMaxLevel() {

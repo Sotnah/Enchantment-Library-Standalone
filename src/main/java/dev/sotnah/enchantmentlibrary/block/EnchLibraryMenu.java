@@ -4,6 +4,8 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.util.List;
+import org.slf4j.Logger;
+import com.mojang.logging.LogUtils;
 
 import dev.sotnah.enchantmentlibrary.ModRegistry;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
@@ -24,6 +26,7 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 
 public class EnchLibraryMenu extends AbstractContainerMenu {
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     // ── Slot Constants ─────────────────────────────────────────────────────────
 
@@ -33,7 +36,14 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     public static final int PLAYER_INV_START = 3;
     public static final int PLAYER_INV_END = 39;
 
-    private final EnchLibraryBlockEntity tile;
+    // ── Button ID Protocol ─────────────────────────────────────────────────────
+
+    public static final int SHIFT_FLAG = 0x80000000;
+    public static final int CTRL_FLAG = 0x40000000;
+    public static final int ID_MASK = 0x3FFFFFFF;
+
+    private EnchLibraryBlockEntity tile;
+    private final BlockPos blockPos;
     private final Level level;
     private final Player player;
     private final SimpleContainer ioInv = new SimpleContainer(3);
@@ -44,6 +54,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         super(ModRegistry.LIBRARY_MENU.get(), containerId);
         this.level = playerInv.player.level();
         this.player = playerInv.player;
+        this.blockPos = pos;
         net.minecraft.world.level.block.entity.BlockEntity be = this.level.getBlockEntity(pos);
         if (be instanceof EnchLibraryBlockEntity lib) {
             this.tile = lib;
@@ -51,9 +62,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         } else {
             this.tile = null;
             if (!this.level.isClientSide) {
-                // Fallback: log warning (Adım 2)
-                System.err.println(
-                        "[EnchantmentLibrary] Warning: EnchLibraryMenu created with null/invalid tile at " + pos);
+                LOGGER.warn("EnchLibraryMenu created with null/invalid tile at {}", pos);
+                throw new IllegalStateException("Menu opened without valid block entity at " + pos);
             }
         }
         initSlots(playerInv);
@@ -74,6 +84,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
 
         // Slot 0: Enchanted Book input (auto-deposit on insert)
         this.addSlot(new Slot(this.ioInv, INPUT_SLOT, 142, 77) {
+            private boolean depositing = false;
+
             @Override
             public boolean mayPlace(@Nonnull ItemStack stack) {
                 return stack.is(Items.ENCHANTED_BOOK);
@@ -86,16 +98,23 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
 
             @Override
             public void setChanged() {
+                if (depositing)
+                    return;
                 super.setChanged();
                 ItemStack stack = this.getItem();
                 if (!self.level.isClientSide && !stack.isEmpty() && self.tile != null) {
-                    ItemStack toDeposit = stack.copyWithCount(1);
-                    self.tile.depositBook(toDeposit);
-                    self.level.playSound(null, self.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE,
-                            SoundSource.BLOCKS, 1.0F, 1.0F);
-                    stack.shrink(1);
-                    if (stack.isEmpty()) {
-                        this.set(ItemStack.EMPTY);
+                    try {
+                        depositing = true;
+                        ItemStack toDeposit = stack.copyWithCount(1);
+                        self.tile.depositBook(toDeposit);
+                        self.level.playSound(null, self.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE,
+                                SoundSource.BLOCKS, 1.0F, 1.0F);
+                        stack.shrink(1);
+                        if (stack.isEmpty()) {
+                            this.set(ItemStack.EMPTY);
+                        }
+                    } finally {
+                        depositing = false;
                     }
                 }
             }
@@ -159,10 +178,11 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     public boolean stillValid(@Nonnull Player player) {
         if (player.isSpectator())
             return false; // Adım 1: Spectator kontrolü
-        if (this.tile == null || this.tile.isRemoved())
+        if (this.tile != null && this.tile.isRemoved())
             return false;
-        return player.distanceToSqr(this.tile.getBlockPos().getX() + 0.5,
-                this.tile.getBlockPos().getY() + 0.5, this.tile.getBlockPos().getZ() + 0.5) <= 64.0;
+
+        BlockPos pos = this.tile != null ? this.tile.getBlockPos() : this.blockPos;
+        return player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) <= 64.0;
     }
 
     // ── Button Click Handling ──────────────────────────────────────────────────
@@ -175,8 +195,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         if (this.tile == null)
             return false;
 
-        // Restore button (0x7FFFFFFE) - Returns the item in output slot to the library
-        if (id == 0x7FFFFFFE) {
+        // Restore button (-1) - Returns the item in output slot to the library
+        if (id == -1) {
             ItemStack outputSlotItem = this.ioInv.getItem(OUTPUT_SLOT);
             if (!outputSlotItem.isEmpty() && outputSlotItem.is(Items.ENCHANTED_BOOK)) {
                 this.tile.depositBook(outputSlotItem);
@@ -186,9 +206,9 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             return false;
         }
 
-        boolean shift = (id & 0x80000000) != 0;
-        boolean ctrl = (id & 0x40000000) != 0;
-        int enchId = id & 0x3FFFFFFF;
+        boolean shift = (id & SHIFT_FLAG) != 0;
+        boolean ctrl = (id & CTRL_FLAG) != 0;
+        int enchId = id & ID_MASK;
 
         var registry = this.level.registryAccess()
                 .registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
@@ -212,12 +232,43 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             return false;
         }
 
-        if (output.isEmpty()) {
+        // Pre-check extraction validity before modifying the slot (prevents dupe)
+        int currentLevel = EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(ench);
+        int targetLevel;
+
+        if (shift) {
+            targetLevel = currentLevel;
+            while (targetLevel + 1 <= this.getMaxLevel(ench)
+                    && this.tile.canExtract(ench, targetLevel + 1, currentLevel)) {
+                targetLevel++;
+            }
+            if (targetLevel == currentLevel) {
+                return false;
+            }
+        } else {
+            targetLevel = currentLevel + 1;
+        }
+
+        if (!this.tile.canExtract(ench, targetLevel, currentLevel)) {
+            return false;
+        }
+
+        boolean freshBook = output.isEmpty();
+        if (freshBook) {
             output = new ItemStack(Items.ENCHANTED_BOOK);
             this.ioInv.setItem(OUTPUT_SLOT, output);
         }
 
         this.tile.extractEnchant(ench, output, shift);
+
+        // Post-extraction verification: if extractEnchant() silently failed
+        // (e.g., points were consumed between canExtract and actual deduction),
+        // roll back the freshly created empty book to prevent a dupe.
+        if (freshBook && EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
+            this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+            return false;
+        }
+
         return true;
     }
 
@@ -286,6 +337,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         return !this.stillValid(this.player);
     }
 
+    // Suppressed: fastutil Object2LongMap.Entry.getKey() lacks @Nonnull
+    @SuppressWarnings("null")
     public List<Object2LongMap.Entry<Holder<Enchantment>>> getPointsForDisplay() {
         if (this.tile == null)
             return List.of();
@@ -298,7 +351,10 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                     if (e.getLongValue() > 0L)
                         return true;
                     // Keep in list if it's currently in the output book
-                    return outputEnchants != null && outputEnchants.getLevel(e.getKey()) > 0;
+                    @SuppressWarnings("null")
+                    @Nonnull
+                    Holder<Enchantment> ench = e.getKey();
+                    return outputEnchants != null && outputEnchants.getLevel(ench) > 0;
                 })
                 .toList();
     }

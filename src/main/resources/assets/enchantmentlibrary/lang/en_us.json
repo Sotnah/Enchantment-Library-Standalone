@@ -16,5 +16,10 @@
   "tooltip.enchlib.point_refund": "Point Refund: %s",
   "tooltip.enchlib.removing": "Removing Enchantment",
   "tooltip.enchlib.total_refund": "Total Refund: %s",
-  "tooltip.enchlib.extraction_unavailable": "Extraction Unavailable"
+  "tooltip.enchlib.extraction_unavailable": "Extraction Unavailable",
+  "tooltip.enchlib.return_book": "Return Book",
+  "tooltip.enchlib.return_book_desc": "Deposits back the enchanted book in the %s slot.",
+  "tooltip.enchlib.output_slot_name": "OUTPUT",
+  "tooltip.enchlib.shift_info": "Hold Shift for more information.",
+  "tooltip.enchlib.not_enchanted": "Not Enchanted"
 }

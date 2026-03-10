@@ -9,7 +9,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
-@SuppressWarnings("null")
 @Mod(value = EnchantmentLibraryMod.MOD_ID, dist = Dist.CLIENT)
 public class EnchantmentLibraryClient {
 
@@ -17,6 +16,8 @@ public class EnchantmentLibraryClient {
         modBus.addListener(this::onRegisterMenuScreens);
     }
 
+    // Suppressed: vanilla ModRegistry.LIBRARY_MENU.get() return type lacks @Nonnull
+    @SuppressWarnings("null")
     private void onRegisterMenuScreens(@Nonnull RegisterMenuScreensEvent event) {
         event.register(ModRegistry.LIBRARY_MENU.get(), EnchLibraryScreen::new);
     }

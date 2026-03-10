@@ -20,11 +20,12 @@ import net.minecraft.resources.ResourceLocation;
  * <p>
  * Uses FastUtil primitive maps to eliminate autoboxing during synchronization.
  */
-@SuppressWarnings("null")
 public record LibraryData(
                 @Nonnull Object2LongMap<ResourceLocation> points,
                 @Nonnull Object2IntMap<ResourceLocation> maxLevels) {
 
+        // Suppressed: RecordCodecBuilder and Codec.unboundedMap types lack @Nonnull
+        @SuppressWarnings("null")
         public static final Codec<LibraryData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                         Codec.unboundedMap(ResourceLocation.CODEC, Codec.LONG).fieldOf("points")
                                         .forGetter(d -> d.points),
@@ -33,6 +34,9 @@ public record LibraryData(
                         .apply(instance, (pts, lvls) -> new LibraryData(new Object2LongOpenHashMap<>(pts),
                                         new Object2IntOpenHashMap<>(lvls))));
 
+        // Suppressed: ByteBufCodecs and ResourceLocation.STREAM_CODEC return types lack
+        // @Nonnull
+        @SuppressWarnings("null")
         private static final StreamCodec<ByteBuf, Object2LongMap<ResourceLocation>> POINTS_STREAM_CODEC = new StreamCodec<>() {
                 @Override
                 public Object2LongMap<ResourceLocation> decode(ByteBuf buf) {
@@ -55,6 +59,9 @@ public record LibraryData(
                 }
         };
 
+        // Suppressed: ByteBufCodecs and ResourceLocation.STREAM_CODEC return types lack
+        // @Nonnull
+        @SuppressWarnings("null")
         private static final StreamCodec<ByteBuf, Object2IntMap<ResourceLocation>> LEVELS_STREAM_CODEC = new StreamCodec<>() {
                 @Override
                 public Object2IntMap<ResourceLocation> decode(ByteBuf buf) {
@@ -77,6 +84,8 @@ public record LibraryData(
                 }
         };
 
+        // Suppressed: StreamCodec.composite() parameters or return type lack @Nonnull
+        @SuppressWarnings("null")
         public static final StreamCodec<ByteBuf, LibraryData> STREAM_CODEC = StreamCodec.composite(
                         POINTS_STREAM_CODEC, LibraryData::points,
                         LEVELS_STREAM_CODEC, LibraryData::maxLevels,

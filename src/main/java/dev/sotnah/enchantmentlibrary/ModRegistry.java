@@ -23,27 +23,32 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-// Field initializers reference vanilla Registries constants which lack @Nonnull — class-level suppress is the only viable option in Java
-@SuppressWarnings("null")
 public final class ModRegistry {
 
         // ── Registers ──────────────────────────────────────────────────────────────
 
+        @SuppressWarnings("null")
         public static final DeferredRegister.Blocks BLOCKS = DeferredRegister
                         .createBlocks(EnchantmentLibraryMod.MOD_ID);
+        @SuppressWarnings("null")
         public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(EnchantmentLibraryMod.MOD_ID);
+        @SuppressWarnings("null")
         public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister
                         .create(Registries.BLOCK_ENTITY_TYPE, EnchantmentLibraryMod.MOD_ID);
+        @SuppressWarnings("null")
         public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU,
                         EnchantmentLibraryMod.MOD_ID);
+        @SuppressWarnings("null")
         public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(
                         Registries.CREATIVE_MODE_TAB,
                         EnchantmentLibraryMod.MOD_ID);
+        @SuppressWarnings("null")
         public static final DeferredRegister.DataComponents DATA_COMPONENTS = DeferredRegister
                         .createDataComponents(Registries.DATA_COMPONENT_TYPE, EnchantmentLibraryMod.MOD_ID);
 
         // ── Data Components ────────────────────────────────────────────────────────
 
+        @SuppressWarnings("null")
         public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>, net.minecraft.core.component.DataComponentType<LibraryData>> LIBRARY_DATA = DATA_COMPONENTS
                         .registerComponentType("library_data",
                                         builder -> builder.persistent(LibraryData.CODEC)
@@ -75,12 +80,15 @@ public final class ModRegistry {
 
         // ── Items ──────────────────────────────────────────────────────────────────
 
+        @SuppressWarnings("null")
         public static final DeferredHolder<Item, BlockItem> ITEM_TIER1 = ITEMS.register("library_tier1",
                         () -> new BlockItem(LIBRARY_TIER1.get(), new Item.Properties()));
 
+        @SuppressWarnings("null")
         public static final DeferredHolder<Item, BlockItem> ITEM_TIER2 = ITEMS.register("library_tier2",
                         () -> new BlockItem(LIBRARY_TIER2.get(), new Item.Properties()));
 
+        @SuppressWarnings("null")
         public static final DeferredHolder<Item, BlockItem> ITEM_TIER3 = ITEMS.register("library_tier3",
                         () -> new BlockItem(LIBRARY_TIER3.get(), new Item.Properties()));
 
@@ -92,6 +100,7 @@ public final class ModRegistry {
 
         // ── Creative Tab ───────────────────────────────────────────────────────────
 
+        @SuppressWarnings("null")
         public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("enchantmentlibrary",
                         () -> CreativeModeTab.builder()
                                         .title(Component.translatable("itemGroup.enchantmentlibrary"))

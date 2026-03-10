@@ -8,8 +8,10 @@ import javax.annotation.Nonnull;
 import dev.sotnah.enchantmentlibrary.ModRegistry;
 import dev.sotnah.enchantmentlibrary.component.LibraryData;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
+import it.unimi.dsi.fastutil.objects.Object2LongMaps;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -119,7 +121,15 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
             return;
 
         long cost = levelToPoints(targetLevel) - levelToPoints(currentLevel);
-        this.points.put(ench, this.points.getLong(ench) - cost);
+
+        // Final guard: verify points haven't changed since the canExtract() check to
+        // prevent exploits
+        long currentPoints = this.points.getLong(ench);
+        if (currentPoints < cost) {
+            return;
+        }
+
+        this.points.put(ench, Math.max(0L, currentPoints - cost));
 
         stack.enchant(ench, targetLevel);
 
@@ -142,6 +152,8 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     /**
      * Refunds an enchantment level (or points) from an item back into the library.
      */
+    // Suppressed: vanilla ItemEnchantments.Mutable.toImmutable() lacks @Nonnull
+    @SuppressWarnings("null")
     public void refundEnchant(@Nonnull Holder<Enchantment> ench, @Nonnull ItemStack stack, boolean all) {
         ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(stack);
         int currentLevel = enchantments.getLevel(ench);
@@ -346,14 +358,14 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // Suppressed: vanilla Object2LongMap (fastutil) return type lacks @Nonnull
     @SuppressWarnings("null")
     public Object2LongMap<Holder<Enchantment>> getPoints() {
-        return this.points;
+        return Object2LongMaps.unmodifiable(this.points);
     }
 
     @Nonnull
     // Suppressed: vanilla Object2IntMap (fastutil) return type lacks @Nonnull
     @SuppressWarnings("null")
     public Object2IntMap<Holder<Enchantment>> getMaxLevels() {
-        return this.maxLevels;
+        return Object2IntMaps.unmodifiable(this.maxLevels);
     }
 
     public int getMaxLevel() {
@@ -395,14 +407,25 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
             this.stack = stack;
         }
 
+        /**
+         * Acts as a "deposit chute" for automated systems (like hoppers).
+         * Enchanted books inserted here are immediately consumed and converted to
+         * points,
+         * rather than being stored in a physical slot. This keeps the handler logically
+         * "empty"
+         * even during rapid insertion.
+         */
         @Override
         @Nonnull
         // Suppressed: vanilla Items.ENCHANTED_BOOK and ItemStack.EMPTY lack @Nonnull
         @SuppressWarnings("null")
         public ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) {
-            if (stack.isEmpty() || !stack.is(Items.ENCHANTED_BOOK))
+            // Validation: Only slot 0, non-empty enchanted books, and respect our own slot
+            // limit
+            if (slot != 0 || stack.isEmpty() || !stack.is(Items.ENCHANTED_BOOK) || !this.stack.isEmpty())
                 return stack;
 
+            // We behave as a slot with limit 1: accept 1, return the rest.
             ItemStack remainder = stack.copy();
             remainder.shrink(1);
 

@@ -5,7 +5,6 @@ import javax.annotation.Nonnull;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 
-@SuppressWarnings("null")
 @Mod(EnchantmentLibraryMod.MOD_ID)
 public class EnchantmentLibraryMod {
 

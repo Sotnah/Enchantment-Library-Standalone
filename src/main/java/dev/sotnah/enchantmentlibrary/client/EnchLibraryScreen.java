@@ -40,6 +40,10 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     private static final int ENCH_NAME_COLOR = 0x404040;
     private static final int FILTER_TEXT_COLOR = 0x404040;
     private static final int TOOLTIP_TITLE_COLOR = 0x40FFFF;
+    private static final int RESTORE_BTN_X = 141;
+    private static final int RESTORE_BTN_Y = 48;
+    private static final int RESTORE_BTN_W = 16;
+    private static final int RESTORE_BTN_H = 16;
 
     // ── UI Coordinates ─────────────────────────────────────────────────────────
     private static final int FILTER_BOX_X = 16;
@@ -65,6 +69,11 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         this.imageHeight = 230;
         this.inventoryLabelY = this.imageHeight - 94;
         menu.setNotifier(this::containerChanged);
+    }
+
+    private boolean isOverRestoreButton(double mouseX, double mouseY) {
+        return mouseX >= this.leftPos + RESTORE_BTN_X && mouseX < this.leftPos + RESTORE_BTN_X + RESTORE_BTN_W
+                && mouseY >= this.topPos + RESTORE_BTN_Y && mouseY < this.topPos + RESTORE_BTN_Y + RESTORE_BTN_H;
     }
 
     // Suppressed: vanilla EditBox, font, Component factories lack @Nonnull
@@ -97,9 +106,9 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         super.render(gfx, mouseX, mouseY, partialTick);
 
         // Render highlight for the return button exactly like vanilla
-        if (mouseX >= this.leftPos + 141 && mouseX < this.leftPos + 157 && mouseY >= this.topPos + 48
-                && mouseY < this.topPos + 64) {
-            AbstractContainerScreen.renderSlotHighlight(gfx, this.leftPos + 141, this.topPos + 48, 0);
+        if (isOverRestoreButton(mouseX, mouseY)) {
+            AbstractContainerScreen.renderSlotHighlight(gfx, this.leftPos + RESTORE_BTN_X, this.topPos + RESTORE_BTN_Y,
+                    0);
         }
 
         this.renderTooltip(gfx, mouseX, mouseY);
@@ -138,8 +147,8 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         // Background
         gfx.blit(TEXTURE, x, y, 194f, slot == hovered ? ENTRY_HEIGHT : 0f, ENTRY_WIDTH, ENTRY_HEIGHT, 307, 256);
 
-        // Enchantment name (scaled to fit)
-        Component name = Enchantment.getFullname(slot.ench, slot.maxLevel);
+        // Enchantment name (scaled to fit, cached in LibrarySlot)
+        Component name = slot.displayName();
         int nameWidth = this.font.width(name);
         float scale = nameWidth > ENTRY_WIDTH - 4 ? (ENTRY_WIDTH - 4f) / nameWidth : 1.0F;
 
@@ -169,17 +178,16 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         super.renderTooltip(gfx, mouseX, mouseY);
 
         // Restore button tooltip check
-        if (mouseX >= this.leftPos + 141 && mouseX < this.leftPos + 157 && mouseY >= this.topPos + 48
-                && mouseY < this.topPos + 64) {
+        if (isOverRestoreButton(mouseX, mouseY)) {
             List<Component> tooltip = new ArrayList<>();
-            tooltip.add(Component.literal("Return Book"));
+            tooltip.add(Component.translatable("tooltip.enchlib.return_book"));
 
             if (Screen.hasShiftDown()) {
-                tooltip.add(Component.literal("Deposits back the enchanted book in the ")
-                        .append(Component.literal("OUTPUT").withStyle(s -> s.withColor(0xFFAA00)))
-                        .append(Component.literal(" slot.")));
+                tooltip.add(Component.translatable("tooltip.enchlib.return_book_desc",
+                        Component.translatable("tooltip.enchlib.output_slot_name")
+                                .withStyle(s -> s.withColor(0xFFAA00))));
             } else {
-                tooltip.add(Component.literal("Hold Shift for more information.").withStyle(ChatFormatting.GRAY));
+                tooltip.add(Component.translatable("tooltip.enchlib.shift_info").withStyle(ChatFormatting.GRAY));
             }
 
             gfx.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
@@ -231,7 +239,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                                 .withStyle(ChatFormatting.GREEN));
                     }
                 } else {
-                    tooltip.add(Component.literal("Not Enchanted").withStyle(ChatFormatting.RED));
+                    tooltip.add(Component.translatable("tooltip.enchlib.not_enchanted").withStyle(ChatFormatting.RED));
                 }
             } else {
                 int targetLevel;
@@ -269,11 +277,23 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         this.scrolling = false;
 
-        // Restore button click
-        if (mouseX >= this.leftPos + 141 && mouseX < this.leftPos + 157 && mouseY >= this.topPos + 48
-                && mouseY < this.topPos + 64) {
+        if (this.handleRestoreButtonClick(mouseX, mouseY))
+            return true;
+        if (this.handleScrollbarClick(mouseX, mouseY, button))
+            return true;
+        if (this.handleEnchantmentSlotClick(mouseX, mouseY))
+            return true;
+        if (this.handleFilterRightClick(mouseX, mouseY, button))
+            return true;
+
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @SuppressWarnings("null")
+    private boolean handleRestoreButtonClick(double mouseX, double mouseY) {
+        if (isOverRestoreButton(mouseX, mouseY)) {
             if (this.minecraft != null && this.minecraft.gameMode != null) {
-                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0x7FFFFFFE);
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, -1);
                 if (this.minecraft.getSoundManager() != null) {
                     this.minecraft.getSoundManager().play(
                             net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
@@ -282,25 +302,31 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
             }
             return true;
         }
+        return false;
+    }
 
-        // Scrollbar drag
+    @SuppressWarnings("null")
+    private boolean handleScrollbarClick(double mouseX, double mouseY, int button) {
         if (mouseX >= this.leftPos + 14 && mouseX < this.leftPos + 18 && mouseY >= this.topPos + 29
                 && mouseY < this.topPos + 132) {
             this.scrolling = this.data.size() > MAX_ENTRIES;
             this.mouseDragged(mouseX, mouseY, button, 0, 0);
             return true;
         }
+        return false;
+    }
 
-        // Enchantment slot click
+    @SuppressWarnings("null")
+    private boolean handleEnchantmentSlotClick(double mouseX, double mouseY) {
         LibrarySlot libSlot = this.getHoveredSlot((int) mouseX, (int) mouseY);
         if (libSlot != null) {
             if (this.minecraft != null && this.minecraft.level != null && this.minecraft.gameMode != null) {
                 var registry = this.minecraft.level.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
                 int id = registry.getId(libSlot.ench.value());
                 if (Screen.hasShiftDown())
-                    id |= 0x80000000;
+                    id |= EnchLibraryMenu.SHIFT_FLAG;
                 if (Screen.hasControlDown())
-                    id |= 0x40000000;
+                    id |= EnchLibraryMenu.CTRL_FLAG;
                 this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, id);
                 if (this.minecraft.getSoundManager() != null) {
                     this.minecraft.getSoundManager().play(
@@ -310,14 +336,16 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
             }
             return true;
         }
+        return false;
+    }
 
-        // Right-click on filter clears it
+    @SuppressWarnings("null")
+    private boolean handleFilterRightClick(double mouseX, double mouseY, int button) {
         if (button == 1 && this.filter.isMouseOver(mouseX, mouseY)) {
             this.filter.setValue("");
             return true;
         }
-
-        return super.mouseClicked(mouseX, mouseY, button);
+        return false;
     }
 
     @Override
@@ -363,20 +391,22 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
 
         for (Object2LongMap.Entry<Holder<Enchantment>> e : entries) {
             Holder<Enchantment> ench = e.getKey();
+            String sortKey = Enchantment.getFullname(ench, 1).getString();
 
             // Name filter
-            String enchName = Enchantment.getFullname(ench, 1).getString().toLowerCase();
-            if (!filterText.isEmpty() && !enchName.contains(filterText))
+            if (!filterText.isEmpty() && !sortKey.toLowerCase().contains(filterText))
                 continue;
 
             // Item filter
             if (!filterItem.isEmpty() && !filterItem.supportsEnchantment(ench))
                 continue;
 
-            this.data.add(new LibrarySlot(ench, e.getLongValue(), this.menu.getMaxLevel(ench)));
+            int maxLvl = this.menu.getMaxLevel(ench);
+            Component displayName = Enchantment.getFullname(ench, maxLvl);
+            this.data.add(new LibrarySlot(ench, e.getLongValue(), maxLvl, sortKey, displayName));
         }
 
-        this.data.sort(Comparator.comparing(s -> Enchantment.getFullname(s.ench, 1).getString()));
+        this.data.sort(Comparator.comparing(LibrarySlot::sortKey, String.CASE_INSENSITIVE_ORDER));
 
         if (this.data.size() <= MAX_ENTRIES) {
             this.scrollOffs = 0;
@@ -411,6 +441,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         // suppress vanilla container title + "Inventory" label
     }
 
-    private record LibrarySlot(Holder<Enchantment> ench, long points, int maxLevel) {
+    private record LibrarySlot(Holder<Enchantment> ench, long points, int maxLevel, String sortKey,
+            Component displayName) {
     }
 }
