@@ -1,7 +1,7 @@
 # Enchantment Library (Standalone)
 
 This mod is a standalone version of the Enchantment Library feature from the
-[Apothic Enchanting](https://github.com/ApothicEnchanting/ApothicEnchanting) mod, with additional features.
+[Apothic Enchanting](https://github.com/ApothicEnchanting/ApothicEnchanting?raw=true) mod, with additional features.
 
 ![Enchantment Library GUI](screenshots/library_gui.png)
 
