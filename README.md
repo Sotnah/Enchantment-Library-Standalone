@@ -31,13 +31,16 @@ the target enchantment level.
 
 The Enchantment Library has three tiers. Higher tiers allow you to reconstruct enchantments at higher levels:
 
-### Library Tier 1: **Level V (5)**
+### Library Tier 1: **Max Level V (5)**
+
 ![Tier 1 Recipe](docs/recipe_tier1.png)
 
-### Library Tier 2: **Level X (10)**
+### Library Tier 2: **Max Level X (10)**
+
 ![Tier 2 Recipe](docs/recipe_tier2.png)
 
-### Library Tier 3: **Level XXX (30)**
+### Library Tier 3: **Max Level XXX (30)**
+
 ![Tier 3 Recipe](docs/recipe_tier3.png)
 
 ## FAQ
