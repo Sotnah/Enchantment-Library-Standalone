@@ -1,6 +1,6 @@
 # Enchantment Library Standalone
 
-This mod is a standalone version of the Enchantment Library feature from the
+This mod is a standalone version of the Enchantment Library block from the
 [Apothic Enchanting](https://www.curseforge.com/minecraft/mc-mods/apothic-enchanting?raw=true) mod by
 [Shadows_of_Fire](https://www.curseforge.com/members/shadows_of_fire/projects), with additional features.
 
