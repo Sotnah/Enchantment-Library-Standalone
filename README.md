@@ -4,7 +4,7 @@ This mod is a standalone version of the Enchantment Library feature from the
 [Apothic Enchanting](https://www.curseforge.com/minecraft/mc-mods/apothic-enchanting?raw=true) mod, with additional
 features.
 
-![Enchantment Library GUI](screenshots/library_gui.png)
+![Enchantment Library GUI](docs/library_gui.png)
 
 ## Core Mechanics
 
@@ -27,7 +27,7 @@ the target enchantment level.
 
 ## Tiers
 
-![Enchantment Library Tiers](screenshots/library_tiers.gif)
+![Enchantment Library Tiers](docs/library_tiers.gif)
 
 The Enchantment Library has three tiers. Higher tiers allow you to reconstruct enchantments at higher levels:
 
