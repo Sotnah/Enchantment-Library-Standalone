@@ -4,7 +4,7 @@ This mod is a standalone version of the Enchantment Library feature from the
 [Apothic Enchanting](https://www.curseforge.com/minecraft/mc-mods/apothic-enchanting?raw=true) mod, with additional
 features.
 
-![Enchantment Library GUI](screenshots/library_gui.png)
+![Enchantment Library GUI](screenshots/library_gui.png?raw=true)
 
 ## Core Mechanics
 
@@ -49,3 +49,7 @@ A: This message appears if you do not have enough stored points for that specifi
 **Q: Does breaking the block destroy the stored enchantments?**  
 A: No. The stored points are saved in the block's data. If you break the library, it will keep its inventory, and you
 will not lose your stored enchantments.
+
+## Modpacks
+
+You can use this mod in any modpack.
