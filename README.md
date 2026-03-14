@@ -1,4 +1,4 @@
-# Enchantment Library Standalone
+# Enchantment Library Standalone ![CurseForge Downloads](https://img.shields.io/curseforge/dt/1484546?style=for-the-badge&logo=curseforge&label=Curseforge&color=F16436)
 
 This mod is a standalone version of the Enchantment Library block from the
 [Apothic Enchanting](https://www.curseforge.com/minecraft/mc-mods/apothic-enchanting?raw=true) mod by
