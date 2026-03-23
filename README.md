@@ -21,9 +21,8 @@ allowing you to seamlessly reconstruct exactly the book you need, at the exact l
 
 - **Insertion:** Simply place any Enchanted Book into the input slot. The library will consume the book, break down the
   enchantments into raw mathematical points, and add them to your pool.
-- **The Disenchant Mechanic:** Have old, unused, or looted enchanted armor and tools? Place them in the `FILTER` slot
-  and click the **Disenchant Button**. The library will utterly destroy the item, siphoning its magical essence and
-  adding the enchantments directly into the block's point storage.
+- **The Disenchant Mechanic:** Place any enchanted item in the `FILTER` slot and click the **Disenchant Button**. This
+  destroys the item but adds its enchantments directly to the library.
 
 ### Extracting & Refunding
 
