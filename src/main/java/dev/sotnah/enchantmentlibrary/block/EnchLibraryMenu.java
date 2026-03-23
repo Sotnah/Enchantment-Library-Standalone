@@ -41,6 +41,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     public static final int SHIFT_FLAG = 0x80000000;
     public static final int CTRL_FLAG = 0x40000000;
     public static final int ID_MASK = 0x3FFFFFFF;
+    public static final int DISENCHANT_ID = -2;
 
     private EnchLibraryBlockEntity tile;
     private final BlockPos blockPos;
@@ -83,7 +84,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         EnchLibraryMenu self = this;
 
         // Slot 0: Enchanted Book input (auto-deposit on insert)
-        this.addSlot(new Slot(this.ioInv, INPUT_SLOT, 142, 77) {
+        this.addSlot(new Slot(this.ioInv, INPUT_SLOT, 143, 64) {
             private boolean depositing = false;
 
             @Override
@@ -122,7 +123,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
 
         // Slot 1: Output slot for extracted enchanted books (enchanted books only,
         // maxStack=1)
-        this.addSlot(new Slot(this.ioInv, OUTPUT_SLOT, 142, 106) {
+        this.addSlot(new Slot(this.ioInv, OUTPUT_SLOT, 143, 92) {
             @Override
             public boolean mayPlace(@Nonnull ItemStack stack) {
                 return false;
@@ -141,7 +142,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         });
 
         // Slot 2: Item filter slot (any item, used to filter visible enchantments)
-        this.addSlot(new Slot(this.ioInv, FILTER_SLOT, 142, 18) {
+        this.addSlot(new Slot(this.ioInv, FILTER_SLOT, 143, 37) {
             @Override
             public void setChanged() {
                 super.setChanged();
@@ -177,7 +178,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     @Override
     public boolean stillValid(@Nonnull Player player) {
         if (player.isSpectator())
-            return false; // Adım 1: Spectator kontrolü
+            return false;
         if (this.tile != null && this.tile.isRemoved())
             return false;
 
@@ -195,15 +196,59 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         if (this.tile == null)
             return false;
 
-        // Restore button (-1) - Returns the item in output slot to the library
+        boolean requireXp = dev.sotnah.enchantmentlibrary.Config.requireXpForExtraction.get();
+        boolean isCreative = player.isCreative();
+        int currentTotalXp = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getPlayerTotalXp(player);
+
+        // Return button (-1) - Returns the item in output slot to the library
         if (id == -1) {
             ItemStack outputSlotItem = this.ioInv.getItem(OUTPUT_SLOT);
             if (!outputSlotItem.isEmpty() && outputSlotItem.is(Items.ENCHANTED_BOOK)) {
+                // Refund entire book XP
+                if (requireXp && !isCreative) {
+                    int totalRefundXp = 0;
+                    net.minecraft.world.item.enchantment.ItemEnchantments enchantments = EnchantmentHelper
+                            .getEnchantmentsForCrafting(outputSlotItem);
+                    for (it.unimi.dsi.fastutil.objects.Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments
+                            .entrySet()) {
+                        totalRefundXp += dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(entry.getIntValue());
+                    }
+                    if (totalRefundXp > 0) {
+                        dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, totalRefundXp);
+                    }
+                }
+
                 this.tile.depositBook(outputSlotItem);
                 this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
                 return true;
             }
             return false;
+        }
+
+        // Disenchant button (-2) - Deposits enchantments from the filter slot into this library
+        if (id == DISENCHANT_ID) {
+            if (!dev.sotnah.enchantmentlibrary.Config.enableDisenchantButton.get()) {
+                return false;
+            }
+            ItemStack filterItem = this.ioInv.getItem(FILTER_SLOT);
+            if (filterItem.isEmpty() || filterItem.is(Items.ENCHANTED_BOOK)) {
+                return false;
+            }
+
+            if (EnchantmentHelper.getEnchantmentsForCrafting(filterItem).isEmpty()) {
+                return false;
+            }
+
+            // Dupe prevention: clear slot first, then deposit using the removed stack.
+            ItemStack toDeposit = filterItem.copy();
+            this.ioInv.setItem(FILTER_SLOT, ItemStack.EMPTY);
+            this.tile.depositEnchantsFromItem(toDeposit);
+            // Success SFX: play two sounds together.
+            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE,
+                    SoundSource.BLOCKS, 1.0F, 1.0F);
+            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.TRIDENT_RETURN,
+                    SoundSource.PLAYERS, 1.0F, 1.0F);
+            return true;
         }
 
         boolean shift = (id & SHIFT_FLAG) != 0;
@@ -221,13 +266,23 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         // Refund logic (Ctrl or Shift+Ctrl)
         if (ctrl) {
             if (!output.isEmpty() && output.is(Items.ENCHANTED_BOOK)) {
-                this.tile.refundEnchant(ench, output, shift);
+                int currentLevel = EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(ench);
+                if (currentLevel > 0) {
+                    int targetLevel = shift ? 0 : currentLevel - 1;
+                    int refundXp = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel)
+                            - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel);
 
-                if (EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
-                    this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+                    this.tile.refundEnchant(ench, output, shift);
+
+                    if (requireXp && !isCreative && refundXp > 0) {
+                        dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, refundXp);
+                    }
+
+                    if (EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
+                        this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+                    }
+                    return true;
                 }
-
-                return true;
             }
             return false;
         }
@@ -240,6 +295,11 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             targetLevel = currentLevel;
             while (targetLevel + 1 <= this.getMaxLevel(ench)
                     && this.tile.canExtract(ench, targetLevel + 1, currentLevel)) {
+                int nextCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel + 1)
+                        - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel);
+                if (requireXp && !isCreative && currentTotalXp < nextCost) {
+                    break;
+                }
                 targetLevel++;
             }
             if (targetLevel == currentLevel) {
@@ -253,20 +313,29 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             return false;
         }
 
+        int xpCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel)
+                - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel);
+        if (requireXp && !isCreative && currentTotalXp < xpCost) {
+            return false;
+        }
+
         boolean freshBook = output.isEmpty();
         if (freshBook) {
             output = new ItemStack(Items.ENCHANTED_BOOK);
             this.ioInv.setItem(OUTPUT_SLOT, output);
         }
 
-        this.tile.extractEnchant(ench, output, shift);
+        boolean success = this.tile.extractEnchant(ench, output, targetLevel);
 
-        // Post-extraction verification: if extractEnchant() silently failed
-        // (e.g., points were consumed between canExtract and actual deduction),
-        // roll back the freshly created empty book to prevent a dupe.
-        if (freshBook && EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
-            this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+        if (!success) {
+            if (freshBook && EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
+                this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
+            }
             return false;
+        }
+
+        if (requireXp && !isCreative && xpCost > 0) {
+            dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, -xpCost);
         }
 
         return true;
@@ -347,6 +416,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         var outputEnchants = !outputStack.isEmpty() ? EnchantmentHelper.getEnchantmentsForCrafting(outputStack) : null;
 
         return this.tile.getPoints().object2LongEntrySet().stream()
+                .filter(e -> !dev.sotnah.enchantmentlibrary.Config.isBlacklisted(e.getKey()))
                 .filter(e -> {
                     if (e.getLongValue() > 0L)
                         return true;

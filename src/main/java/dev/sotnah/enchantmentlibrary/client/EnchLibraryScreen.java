@@ -7,6 +7,8 @@ import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import dev.sotnah.enchantmentlibrary.Config;
+import dev.sotnah.enchantmentlibrary.PlayerXpHelper;
 import dev.sotnah.enchantmentlibrary.EnchantmentLibraryMod;
 import dev.sotnah.enchantmentlibrary.block.EnchLibraryBlockEntity;
 import dev.sotnah.enchantmentlibrary.block.EnchLibraryMenu;
@@ -19,12 +21,15 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import java.util.Optional;
 
 public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> {
 
@@ -37,13 +42,17 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     private static final float SCROLLBAR_RANGE = 90F;
     private static final int SCROLLBAR_DRAG_HEIGHT = 103;
     private static final int PROGRESS_BAR_WIDTH = 85;
-    private static final int ENCH_NAME_COLOR = 0x404040;
-    private static final int FILTER_TEXT_COLOR = 0x404040;
-    private static final int TOOLTIP_TITLE_COLOR = 0x40FFFF;
-    private static final int RESTORE_BTN_X = 141;
-    private static final int RESTORE_BTN_Y = 48;
-    private static final int RESTORE_BTN_W = 16;
-    private static final int RESTORE_BTN_H = 16;
+    private static final int ENCH_NAME_COLOR = 0xFFFFFF;
+    private static final int FILTER_TEXT_COLOR = 0xFFFFFF;
+    private static final int RETURN_BTN_X = 143;
+    private static final int RETURN_BTN_Y = 116;
+    private static final int RETURN_BTN_W = 13;
+    private static final int RETURN_BTN_H = 13;
+
+    private static final int DISENCHANT_BTN_X = 143;
+    private static final int DISENCHANT_BTN_Y = 14;
+    private static final int DISENCHANT_BTN_W = 13;
+    private static final int DISENCHANT_BTN_H = 13;
 
     // ── UI Coordinates ─────────────────────────────────────────────────────────
     private static final int FILTER_BOX_X = 16;
@@ -71,9 +80,22 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         menu.setNotifier(this::containerChanged);
     }
 
-    private boolean isOverRestoreButton(double mouseX, double mouseY) {
-        return mouseX >= this.leftPos + RESTORE_BTN_X && mouseX < this.leftPos + RESTORE_BTN_X + RESTORE_BTN_W
-                && mouseY >= this.topPos + RESTORE_BTN_Y && mouseY < this.topPos + RESTORE_BTN_Y + RESTORE_BTN_H;
+    private boolean isOverReturnButton(double mouseX, double mouseY) {
+        return mouseX >= this.leftPos + RETURN_BTN_X && mouseX < this.leftPos + RETURN_BTN_X + RETURN_BTN_W
+                && mouseY >= this.topPos + RETURN_BTN_Y && mouseY < this.topPos + RETURN_BTN_Y + RETURN_BTN_H;
+    }
+
+    private boolean isOverDisenchantButton(double mouseX, double mouseY) {
+        return mouseX >= this.leftPos + DISENCHANT_BTN_X && mouseX < this.leftPos + DISENCHANT_BTN_X + DISENCHANT_BTN_W
+                && mouseY >= this.topPos + DISENCHANT_BTN_Y
+                && mouseY < this.topPos + DISENCHANT_BTN_Y + DISENCHANT_BTN_H;
+    }
+
+    private void renderButtonHighlight(GuiGraphics gfx, int x, int y, int width, int height) {
+        gfx.pose().pushPose();
+        gfx.pose().translate(0, 0, 100);
+        gfx.fill(x, y, x + width, y + height, 0x80FFFFFF);
+        gfx.pose().popPose();
     }
 
     // Suppressed: vanilla EditBox, font, Component factories lack @Nonnull
@@ -105,10 +127,15 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     public void render(@Nonnull GuiGraphics gfx, int mouseX, int mouseY, float partialTick) {
         super.render(gfx, mouseX, mouseY, partialTick);
 
-        // Render highlight for the return button exactly like vanilla
-        if (isOverRestoreButton(mouseX, mouseY)) {
-            AbstractContainerScreen.renderSlotHighlight(gfx, this.leftPos + RESTORE_BTN_X, this.topPos + RESTORE_BTN_Y,
-                    0);
+        // Render highlight for the return button correctly sized (13x13)
+        if (isOverReturnButton(mouseX, mouseY)) {
+            renderButtonHighlight(gfx, this.leftPos + RETURN_BTN_X, this.topPos + RETURN_BTN_Y, RETURN_BTN_W,
+                    RETURN_BTN_H);
+        }
+
+        if (isOverDisenchantButton(mouseX, mouseY)) {
+            renderButtonHighlight(gfx, this.leftPos + DISENCHANT_BTN_X, this.topPos + DISENCHANT_BTN_Y,
+                    DISENCHANT_BTN_W, DISENCHANT_BTN_H);
         }
 
         this.renderTooltip(gfx, mouseX, mouseY);
@@ -177,8 +204,8 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     protected void renderTooltip(@Nonnull GuiGraphics gfx, int mouseX, int mouseY) {
         super.renderTooltip(gfx, mouseX, mouseY);
 
-        // Restore button tooltip check
-        if (isOverRestoreButton(mouseX, mouseY)) {
+        // Return button tooltip check
+        if (isOverReturnButton(mouseX, mouseY)) {
             List<Component> tooltip = new ArrayList<>();
             tooltip.add(Component.translatable("tooltip.enchlib.return_book"));
 
@@ -190,8 +217,54 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                 tooltip.add(Component.translatable("tooltip.enchlib.shift_info").withStyle(ChatFormatting.GRAY));
             }
 
-            gfx.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
+            boolean requireXp2 = Config.requireXpForExtraction.get();
+            boolean isCreative2 = this.minecraft != null && this.minecraft.player != null
+                    && this.minecraft.player.isCreative();
+            if (requireXp2 && !isCreative2) {
+                ItemStack outputSlotItem = this.menu.getSlot(1).getItem();
+                if (!outputSlotItem.isEmpty() && outputSlotItem.is(net.minecraft.world.item.Items.ENCHANTED_BOOK)) {
+                    int totalRefundXp = 0;
+                    net.minecraft.world.item.enchantment.ItemEnchantments enchantments = EnchantmentHelper
+                            .getEnchantmentsForCrafting(outputSlotItem);
+                    for (it.unimi.dsi.fastutil.objects.Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments
+                            .entrySet()) {
+                        totalRefundXp += PlayerXpHelper.getCost(entry.getIntValue());
+                    }
+                    if (totalRefundXp > 0) {
+                        int levelEquivalent = PlayerXpHelper.getLevelFromXp(totalRefundXp);
+                        String formattedXp = java.text.NumberFormat.getIntegerInstance(java.util.Locale.US)
+                                .format(totalRefundXp);
+                        MutableComponent xpLine = Component.literal("+" + formattedXp + " XP Refund")
+                                .withStyle(ChatFormatting.GREEN)
+                                .append(Component.literal(" (" + levelEquivalent + " Level)")
+                                        .withStyle(ChatFormatting.GRAY));
+                        tooltip.add(xpLine);
+                    }
+                }
+            }
+
+            gfx.renderTooltip(this.font, tooltip, Optional.empty(), mouseX, mouseY);
             return; // We return here to avoid overlapping tooltips.
+        }
+
+        // Disenchant button tooltip check
+        if (isOverDisenchantButton(mouseX, mouseY)) {
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(Component.translatable("tooltip.enchlib.disenchant"));
+            boolean disenchantEnabled = Config.enableDisenchantButton.get();
+            if (!disenchantEnabled) {
+                tooltip.add(Component.literal("§c§lDisabled from config."));
+            }
+
+            if (Screen.hasShiftDown()) {
+                Component filterWord = Component.literal("FILTER").withStyle(ChatFormatting.GRAY);
+                tooltip.add(Component.translatable("tooltip.enchlib.disenchant_desc", filterWord));
+            } else {
+                tooltip.add(Component.translatable("tooltip.enchlib.shift_info").withStyle(ChatFormatting.GRAY));
+            }
+
+            gfx.renderTooltip(this.font, tooltip, Optional.empty(), mouseX, mouseY);
+            return;
         }
 
         LibrarySlot hovered = this.getHoveredSlot(mouseX, mouseY);
@@ -200,12 +273,32 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
             if (tile == null)
                 return;
             List<Component> tooltip = new ArrayList<>();
-            tooltip.add(Enchantment.getFullname(hovered.ench, hovered.maxLevel)
-                    .copy().withStyle(s -> s.withColor(TOOLTIP_TITLE_COLOR)));
-            tooltip.add(Component.translatable("tooltip.enchlib.points",
-                    format(hovered.points), format(this.menu.getPointCap())).withStyle(ChatFormatting.GRAY));
-            tooltip.add(Component.translatable("tooltip.enchlib.max_lvl",
-                    Component.translatable("enchantment.level." + hovered.maxLevel)).withStyle(ChatFormatting.GRAY));
+            // Title
+            boolean isCurse = hovered.ench.is(EnchantmentTags.CURSE);
+            ChatFormatting titleColor = isCurse ? ChatFormatting.RED : ChatFormatting.WHITE;
+
+            MutableComponent styledTitle = hovered.ench.value().description().copy()
+                    .withStyle(titleColor, ChatFormatting.BOLD)
+                    .append(Component.literal(" "))
+                    .append(levelComponent(hovered.maxLevel).withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
+            tooltip.add(styledTitle);
+
+            if (net.neoforged.fml.ModList.get().isLoaded("enchdesc")) {
+                hovered.ench.unwrapKey().ifPresent(key -> {
+                    ResourceLocation loc = key.location();
+                    String descKey = "enchantment." + loc.getNamespace() + "." + loc.getPath() + ".desc";
+                    if (net.minecraft.client.resources.language.I18n.exists(descKey)) {
+                        ChatFormatting descColor = isCurse ? ChatFormatting.DARK_RED : ChatFormatting.BLUE;
+                        tooltip.add(Component.translatable(descKey).withStyle(descColor));
+                    }
+                });
+            }
+
+            // Points: §7Points: §a96 §8/ §25368.7M
+            tooltip.add(Component.literal("Points: ").withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal(format(hovered.points)).withStyle(ChatFormatting.GREEN))
+                    .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                    .append(Component.literal(format(this.menu.getPointCap())).withStyle(ChatFormatting.DARK_GREEN)));
 
             if (hovered.points <= 0) {
                 tooltip.add(
@@ -219,24 +312,56 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
 
             boolean ctrl = Screen.hasControlDown();
             boolean shift = Screen.hasShiftDown();
+            boolean requireXp = Config.requireXpForExtraction.get();
+            boolean isCreative = this.minecraft != null && this.minecraft.player != null
+                    && this.minecraft.player.isCreative();
+            int playerXp = (this.minecraft != null && this.minecraft.player != null)
+                    ? PlayerXpHelper.getPlayerTotalXp(this.minecraft.player)
+                    : 0;
 
             if (ctrl) {
                 if (currentLevel > 0) {
                     int nextLevel = shift ? 0 : currentLevel - 1;
                     long refundAmount = EnchLibraryBlockEntity.levelToPoints(currentLevel)
                             - EnchLibraryBlockEntity.levelToPoints(nextLevel);
+                    int xpRefundAmount = PlayerXpHelper.getCost(currentLevel)
+                            - PlayerXpHelper.getCost(nextLevel);
 
                     if (shift) {
-                        tooltip.add(Component.translatable("tooltip.enchlib.removing")
-                                .withStyle(ChatFormatting.GREEN));
-                        tooltip.add(Component.translatable("tooltip.enchlib.total_refund", format(refundAmount))
-                                .withStyle(ChatFormatting.GREEN));
+                        MutableComponent removeLine = Component.literal("Removing: ").withStyle(ChatFormatting.GOLD)
+                                .append(Component.literal("Total").withStyle(ChatFormatting.GREEN))
+                                .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                                .append(Component.literal(format(refundAmount) + " Pts")
+                                        .withStyle(ChatFormatting.LIGHT_PURPLE));
+                        tooltip.add(removeLine);
+
+                        if (requireXp && xpRefundAmount > 0) {
+                            int levelEquivalent = PlayerXpHelper.getLevelFromXp(xpRefundAmount);
+                            MutableComponent xpLine = Component.literal("XP Refund: ").withStyle(ChatFormatting.GOLD)
+                                    .append(Component.literal(xpRefundAmount + " XP").withStyle(ChatFormatting.GREEN))
+                                    .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                                    .append(Component.literal("(" + levelEquivalent + " Level)")
+                                            .withStyle(ChatFormatting.LIGHT_PURPLE));
+                            tooltip.add(xpLine);
+                        }
                     } else {
-                        tooltip.add(Component.translatable("tooltip.enchlib.refunding",
-                                Component.translatable("enchantment.level." + currentLevel))
-                                .withStyle(ChatFormatting.GREEN));
-                        tooltip.add(Component.translatable("tooltip.enchlib.point_refund", format(refundAmount))
-                                .withStyle(ChatFormatting.GREEN));
+                        MutableComponent refundLine = Component.literal("Refunding: ").withStyle(ChatFormatting.GOLD)
+                                .append(levelComponent(currentLevel)
+                                        .withStyle(ChatFormatting.GREEN))
+                                .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                                .append(Component.literal(format(refundAmount) + " Pts")
+                                        .withStyle(ChatFormatting.LIGHT_PURPLE));
+                        tooltip.add(refundLine);
+
+                        if (requireXp && xpRefundAmount > 0) {
+                            int levelEquivalent = PlayerXpHelper.getLevelFromXp(xpRefundAmount);
+                            MutableComponent xpLine = Component.literal("XP Refund: ").withStyle(ChatFormatting.GOLD)
+                                    .append(Component.literal(xpRefundAmount + " XP").withStyle(ChatFormatting.GREEN))
+                                    .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                                    .append(Component.literal("(" + levelEquivalent + " Level)")
+                                            .withStyle(ChatFormatting.LIGHT_PURPLE));
+                            tooltip.add(xpLine);
+                        }
                     }
                 } else {
                     tooltip.add(Component.translatable("tooltip.enchlib.not_enchanted").withStyle(ChatFormatting.RED));
@@ -247,6 +372,11 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                     targetLevel = currentLevel;
                     while (targetLevel + 1 <= hovered.maxLevel
                             && tile.canExtract(hovered.ench, targetLevel + 1, currentLevel)) {
+                        int nextCost = PlayerXpHelper.getCost(targetLevel + 1)
+                                - PlayerXpHelper.getCost(currentLevel);
+                        if (requireXp && !isCreative && playerXp < nextCost) {
+                            break;
+                        }
                         targetLevel++;
                     }
                 } else {
@@ -256,17 +386,46 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                 if (targetLevel > currentLevel && tile.canExtract(hovered.ench, targetLevel, currentLevel)) {
                     long totalCost = EnchLibraryBlockEntity.levelToPoints(targetLevel)
                             - EnchLibraryBlockEntity.levelToPoints(currentLevel);
-                    tooltip.add(Component.translatable("tooltip.enchlib.extracting",
-                            Component.translatable("enchantment.level." + targetLevel))
-                            .withStyle(ChatFormatting.GREEN));
-                    tooltip.add(Component.translatable("tooltip.enchlib.cost",
-                            format(totalCost)).withStyle(ChatFormatting.GREEN));
+                    int xpCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel)
+                            - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel);
+
+                    MutableComponent extractLine = Component.literal("Extracting: ").withStyle(ChatFormatting.GOLD)
+                            .append(levelComponent(targetLevel)
+                                    .withStyle(ChatFormatting.GREEN))
+                            .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                            .append(Component.literal(format(totalCost) + " Pts")
+                                    .withStyle(ChatFormatting.LIGHT_PURPLE));
+                    tooltip.add(extractLine);
+
+                    if (requireXp && xpCost > 0) {
+                        int levelEquivalent = PlayerXpHelper.getLevelFromXp(xpCost);
+                        MutableComponent xpLine = Component.literal("XP Costs: ").withStyle(ChatFormatting.GOLD)
+                                .append(Component.literal(xpCost + " XP").withStyle(ChatFormatting.GREEN))
+                                .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
+                                .append(Component.literal("(" + levelEquivalent + " Level)")
+                                        .withStyle(ChatFormatting.LIGHT_PURPLE));
+                        tooltip.add(xpLine);
+                    }
                 } else {
-                    tooltip.add(Component.translatable("tooltip.enchlib.unavailable").withStyle(ChatFormatting.RED));
+                    // Check if it's unavailable purely due to XP
+                    if (targetLevel > currentLevel && !tile.canExtract(hovered.ench, targetLevel, currentLevel)) {
+                        tooltip.add(
+                                Component.translatable("tooltip.enchlib.unavailable").withStyle(ChatFormatting.RED));
+                    } else if (requireXp && !isCreative && targetLevel > currentLevel) {
+                        int xpCost2 = PlayerXpHelper.getCost(targetLevel)
+                                - PlayerXpHelper.getCost(currentLevel);
+                        if (playerXp < xpCost2) {
+                            tooltip.add(Component.literal("Insufficient XP").withStyle(ChatFormatting.RED));
+                            tooltip.add(Component.literal("Needs " + xpCost2 + " XP").withStyle(ChatFormatting.RED));
+                        }
+                    } else {
+                        tooltip.add(
+                                Component.translatable("tooltip.enchlib.unavailable").withStyle(ChatFormatting.RED));
+                    }
                 }
             }
 
-            gfx.renderTooltip(this.font, tooltip, java.util.Optional.empty(), mouseX, mouseY);
+            gfx.renderTooltip(this.font, tooltip, Optional.empty(), mouseX, mouseY);
         }
     }
 
@@ -277,7 +436,9 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         this.scrolling = false;
 
-        if (this.handleRestoreButtonClick(mouseX, mouseY))
+        if (this.handleReturnButtonClick(mouseX, mouseY))
+            return true;
+        if (this.handleDisenchantButtonClick(mouseX, mouseY))
             return true;
         if (this.handleScrollbarClick(mouseX, mouseY, button))
             return true;
@@ -290,10 +451,30 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     }
 
     @SuppressWarnings("null")
-    private boolean handleRestoreButtonClick(double mouseX, double mouseY) {
-        if (isOverRestoreButton(mouseX, mouseY)) {
+    private boolean handleReturnButtonClick(double mouseX, double mouseY) {
+        if (isOverReturnButton(mouseX, mouseY)) {
             if (this.minecraft != null && this.minecraft.gameMode != null) {
                 this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, -1);
+                if (this.minecraft.getSoundManager() != null) {
+                    this.minecraft.getSoundManager().play(
+                            net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+                                    net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @SuppressWarnings("null")
+    private boolean handleDisenchantButtonClick(double mouseX, double mouseY) {
+        if (isOverDisenchantButton(mouseX, mouseY)) {
+            if (!dev.sotnah.enchantmentlibrary.Config.enableDisenchantButton.get()) {
+                return true;
+            }
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId,
+                        EnchLibraryMenu.DISENCHANT_ID);
                 if (this.minecraft.getSoundManager() != null) {
                     this.minecraft.getSoundManager().play(
                             net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
@@ -391,7 +572,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
 
         for (Object2LongMap.Entry<Holder<Enchantment>> e : entries) {
             Holder<Enchantment> ench = e.getKey();
-            String sortKey = Enchantment.getFullname(ench, 1).getString();
+            String sortKey = ench.value().description().getString();
 
             // Name filter
             if (!filterText.isEmpty() && !sortKey.toLowerCase().contains(filterText))
@@ -402,7 +583,16 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                 continue;
 
             int maxLvl = this.menu.getMaxLevel(ench);
-            Component displayName = Enchantment.getFullname(ench, maxLvl);
+            Component displayName = ench.value().description().copy()
+                    .append(Component.literal(" "))
+                    .append(levelComponent(maxLvl));
+
+            if (ench.is(EnchantmentTags.CURSE)) {
+                displayName = displayName.copy().withStyle(net.minecraft.ChatFormatting.RED);
+            } else {
+                displayName = displayName.copy().withStyle(net.minecraft.ChatFormatting.WHITE);
+            }
+
             this.data.add(new LibrarySlot(ench, e.getLongValue(), maxLvl, sortKey, displayName));
         }
 
@@ -429,11 +619,48 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     }
 
     private static String format(long value) {
+        if (value < 1_000L)
+            return String.valueOf(value);
+        if (value >= 1_000_000_000_000_000_000L)
+            return String.format(java.util.Locale.US, "%.1fQn", value / 1_000_000_000_000_000_000.0D);
+        if (value >= 1_000_000_000_000_000L)
+            return String.format(java.util.Locale.US, "%.1fQd", value / 1_000_000_000_000_000.0D);
+        if (value >= 1_000_000_000_000L)
+            return String.format(java.util.Locale.US, "%.1fT", value / 1_000_000_000_000.0D);
+        if (value >= 1_000_000_000L)
+            return String.format(java.util.Locale.US, "%.1fB", value / 1_000_000_000.0D);
         if (value >= 1_000_000L)
-            return String.format("%.1fM", value / 1_000_000.0D);
-        if (value >= 1_000L)
-            return String.format("%.1fK", value / 1_000.0D);
-        return String.valueOf(value);
+            return String.format(java.util.Locale.US, "%.1fM", value / 1_000_000.0D);
+        return String.format(java.util.Locale.US, "%.1fK", value / 1_000.0D);
+    }
+
+    /**
+     * Converts a positive integer to Roman numeral string.
+     * Returns plain decimal string for values beyond 10000.
+     */
+    @Nonnull
+    @SuppressWarnings("null")
+    private static String toRoman(int number) {
+        if (number <= 0 || number > 10_000)
+            return String.valueOf(number);
+        int[] values = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+        String[] symbols = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < values.length; i++) {
+            while (number >= values[i]) {
+                sb.append(symbols[i]);
+                number -= values[i];
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Returns a Component for an enchantment level.
+     * Uses Roman numerals strictly up to 10000; above 10000 use plain decimal.
+     */
+    private static MutableComponent levelComponent(int level) {
+        return Component.literal(toRoman(level));
     }
 
     @Override

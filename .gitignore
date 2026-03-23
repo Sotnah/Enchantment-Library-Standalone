@@ -45,4 +45,5 @@ desktop.ini
 
 # Project specific
 .agent/
-Code Review Prompt.md
+*.md
+!README.md

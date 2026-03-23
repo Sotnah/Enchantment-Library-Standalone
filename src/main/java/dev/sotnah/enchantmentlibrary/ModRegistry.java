@@ -45,6 +45,18 @@ public final class ModRegistry {
         @SuppressWarnings("null")
         public static final DeferredRegister.DataComponents DATA_COMPONENTS = DeferredRegister
                         .createDataComponents(Registries.DATA_COMPONENT_TYPE, EnchantmentLibraryMod.MOD_ID);
+        @SuppressWarnings("null")
+        public static final DeferredRegister<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> LOOT_CONDITIONS = DeferredRegister
+                        .create(Registries.LOOT_CONDITION_TYPE, EnchantmentLibraryMod.MOD_ID);
+
+        // ── Custom Loot Conditions ─────────────────────────────────────────────────
+
+        @SuppressWarnings("null")
+        public static final DeferredHolder<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType, net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> PRESERVE_LIBRARY_DATA = LOOT_CONDITIONS
+                        .register("preserve_library_data",
+                                        () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
+                                                        dev.sotnah.enchantmentlibrary.loot.PreserveLibraryDataCondition.CODEC));
+
 
         // ── Data Components ────────────────────────────────────────────────────────
 
@@ -116,6 +128,7 @@ public final class ModRegistry {
 
         public static void register(@Nonnull IEventBus bus) {
                 DATA_COMPONENTS.register(bus);
+                LOOT_CONDITIONS.register(bus);
                 BLOCKS.register(bus);
                 ITEMS.register(bus);
                 BLOCK_ENTITIES.register(bus);
@@ -139,15 +152,18 @@ public final class ModRegistry {
         // ── Helpers (avoid forward-reference in field initializers, JLS §8.3.3) ──
 
         private static EnchLibraryBlock blockTier1() {
-                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER1.get(), EnchLibraryBlockEntity.Tier.TIER1.maxLevel);
+                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER1.get(),
+                                EnchLibraryBlockEntity.Tier.TIER1.defaultMaxLevel);
         }
 
         private static EnchLibraryBlock blockTier2() {
-                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER2.get(), EnchLibraryBlockEntity.Tier.TIER2.maxLevel);
+                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER2.get(),
+                                EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel);
         }
 
         private static EnchLibraryBlock blockTier3() {
-                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER3.get(), EnchLibraryBlockEntity.Tier.TIER3.maxLevel);
+                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER3.get(),
+                                EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel);
         }
 
         // Suppressed: DataFixer null is intentional — standard NeoForge BlockEntityType

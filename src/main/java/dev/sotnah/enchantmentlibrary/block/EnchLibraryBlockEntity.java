@@ -5,6 +5,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.Nonnull;
 
+import dev.sotnah.enchantmentlibrary.Config;
+import dev.sotnah.enchantmentlibrary.LibraryConstants;
 import dev.sotnah.enchantmentlibrary.ModRegistry;
 import dev.sotnah.enchantmentlibrary.component.LibraryData;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -17,6 +19,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderLookup.RegistryLookup;
+import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -38,12 +41,14 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
 
     // ── Tier definitions (single source of truth) ───────────────────────────
     public enum Tier {
-        TIER1(5), TIER2(10), TIER3(30);
+        TIER1(LibraryConstants.DEFAULT_TIER1_MAX_LEVEL),
+        TIER2(LibraryConstants.DEFAULT_TIER2_MAX_LEVEL),
+        TIER3(LibraryConstants.DEFAULT_TIER3_MAX_LEVEL);
 
-        public final int maxLevel;
+        public final int defaultMaxLevel;
 
-        Tier(int maxLevel) {
-            this.maxLevel = maxLevel;
+        Tier(int defaultMaxLevel) {
+            this.defaultMaxLevel = defaultMaxLevel;
         }
     }
 
@@ -52,14 +57,13 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     protected final Set<EnchLibraryMenu> activeMenus = ConcurrentHashMap.newKeySet();
     protected final IItemHandler itemHandler = new EnchLibItemHandler();
 
-    protected final int maxLevel;
-    protected final long maxPoints;
+    protected final Tier tier;
+    private int lastAppliedConfigEpoch = Integer.MIN_VALUE;
 
     protected EnchLibraryBlockEntity(@Nonnull BlockEntityType<?> type, @Nonnull BlockPos pos, @Nonnull BlockState state,
-            int maxLevel) {
+            Tier tier) {
         super(type, pos, state);
-        this.maxLevel = maxLevel;
-        this.maxPoints = levelToPoints(maxLevel) * 10L;
+        this.tier = tier;
     }
 
     // ── Core Mechanics ─────────────────────────────────────────────────────────
@@ -72,24 +76,68 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // never null at runtime
     @SuppressWarnings("null")
     public void depositBook(@Nonnull ItemStack book) {
+        this.ensureConfigApplied();
         if (!book.is(Items.ENCHANTED_BOOK))
             return;
 
         ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(book);
         for (Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments.entrySet()) {
             Holder<Enchantment> ench = entry.getKey();
+            if (Config.isBlacklisted(ench)) {
+                continue;
+            }
             int bookLevel = entry.getIntValue();
 
             long currentPoints = this.points.getLong(ench);
             long added = levelToPoints(bookLevel);
             long newPoints = currentPoints + added;
             if (newPoints < 0L)
-                newPoints = this.maxPoints; // overflow guard
-            this.points.put(ench, Math.min(this.maxPoints, newPoints));
+                newPoints = this.getMaxPoints(); // overflow guard
+            this.points.put(ench, Math.min(this.getMaxPoints(), newPoints));
 
             int currentMax = this.maxLevels.getInt(ench);
-            this.maxLevels.put(ench, Math.min(this.maxLevel, Math.max(currentMax, bookLevel)));
+            this.maxLevels.put(ench, Math.min(this.getMaxLevel(), Math.max(currentMax, bookLevel)));
         }
+        this.markUpdated();
+    }
+
+    /**
+     * Deposits all enchantments from an item into this library.
+     * <p>
+     * The caller is responsible for consuming/clearing the item; this method only
+     * updates the library's points and max-level tracking.
+     */
+    public void depositEnchantsFromItem(@Nonnull ItemStack stack) {
+        this.ensureConfigApplied();
+        if (stack.isEmpty())
+            return;
+
+        ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(stack);
+        if (enchantments.isEmpty())
+            return;
+
+        long count = stack.getCount();
+        if (count <= 0L)
+            return;
+
+        for (Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments.entrySet()) {
+            Holder<Enchantment> ench = entry.getKey();
+            if (Config.isBlacklisted(ench)) {
+                continue;
+            }
+            int enchLevel = entry.getIntValue();
+
+            long currentPoints = this.points.getLong(ench);
+            long added = levelToPoints(enchLevel) * count;
+            long newPoints = currentPoints + added;
+            if (newPoints < 0L)
+                newPoints = this.getMaxPoints(); // overflow guard
+            this.points.put(ench, Math.min(this.getMaxPoints(), newPoints));
+
+            int currentMax = this.maxLevels.getInt(ench);
+            this.maxLevels.put(ench, Math.min(this.getMaxLevel(), Math.max(currentMax, enchLevel)));
+        }
+
         this.markUpdated();
     }
 
@@ -97,28 +145,16 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      * Extracts an enchantment level onto an item (typically an enchanted book in
      * the output slot).
      *
-     * @param ench  the enchantment to extract
-     * @param stack the target item stack
-     * @param max   if true, jump to the highest affordable level; otherwise
-     *              increment by 1
+     * @param ench        the enchantment to extract
+     * @param stack       the target item stack
+     * @param targetLevel the exact enchantment level to extract
      */
-    public void extractEnchant(@Nonnull Holder<Enchantment> ench, @Nonnull ItemStack stack, boolean max) {
+    public boolean extractEnchant(@Nonnull Holder<Enchantment> ench, @Nonnull ItemStack stack, int targetLevel) {
+        this.ensureConfigApplied();
         int currentLevel = EnchantmentHelper.getEnchantmentsForCrafting(stack).getLevel(ench);
-        int targetLevel;
-
-        if (max) {
-            targetLevel = currentLevel;
-            while (targetLevel + 1 <= this.maxLevels.getInt(ench) && canExtract(ench, targetLevel + 1, currentLevel)) {
-                targetLevel++;
-            }
-            if (targetLevel == currentLevel)
-                return;
-        } else {
-            targetLevel = currentLevel + 1;
-        }
 
         if (!canExtract(ench, targetLevel, currentLevel))
-            return;
+            return false;
 
         long cost = levelToPoints(targetLevel) - levelToPoints(currentLevel);
 
@@ -126,7 +162,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         // prevent exploits
         long currentPoints = this.points.getLong(ench);
         if (currentPoints < cost) {
-            return;
+            return false;
         }
 
         this.points.put(ench, Math.max(0L, currentPoints - cost));
@@ -134,6 +170,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         stack.enchant(ench, targetLevel);
 
         this.markUpdated();
+        return true;
     }
 
     /**
@@ -141,6 +178,9 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      *         seen at the target level.
      */
     public boolean canExtract(@Nonnull Holder<Enchantment> ench, int targetLevel, int currentLevel) {
+        this.ensureConfigApplied();
+        if (Config.isBlacklisted(ench))
+            return false;
         if (targetLevel <= currentLevel)
             return false;
         if (this.maxLevels.getInt(ench) < targetLevel)
@@ -155,6 +195,10 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // Suppressed: vanilla ItemEnchantments.Mutable.toImmutable() lacks @Nonnull
     @SuppressWarnings("null")
     public void refundEnchant(@Nonnull Holder<Enchantment> ench, @Nonnull ItemStack stack, boolean all) {
+        this.ensureConfigApplied();
+        if (Config.isBlacklisted(ench)) {
+            return;
+        }
         ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(stack);
         int currentLevel = enchantments.getLevel(ench);
         if (currentLevel <= 0)
@@ -171,8 +215,8 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
 
         long newPoints = this.points.getLong(ench) + refundAmount;
         if (newPoints < 0L)
-            newPoints = this.maxPoints; // overflow guard
-        this.points.put(ench, Math.min(this.maxPoints, newPoints));
+            newPoints = this.getMaxPoints(); // overflow guard
+        this.points.put(ench, Math.min(this.getMaxPoints(), newPoints));
 
         // Update the book's enchantments
         ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(enchantments);
@@ -193,6 +237,13 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     }
 
     // ── Data Component Conversion ──────────────────────────────────────────────
+
+    @Override
+    @SuppressWarnings("null")
+    protected void collectImplicitComponents(@Nonnull DataComponentMap.Builder components) {
+        super.collectImplicitComponents(components);
+        components.set(ModRegistry.LIBRARY_DATA.get(), this.toLibraryData());
+    }
 
     /**
      * Converts runtime holder-keyed maps to a serializable {@link LibraryData} for
@@ -225,6 +276,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
                 .ifPresent(holder -> this.points.put(holder, val.longValue())));
         data.maxLevels().forEach((loc, val) -> lookup.get(ResourceKey.create(Registries.ENCHANTMENT, loc))
                 .ifPresent(holder -> this.maxLevels.put(holder, val.intValue())));
+        this.ensureConfigApplied();
     }
 
     // ── BlockEntity NBT (world save/load) ──────────────────────────────────────
@@ -242,6 +294,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     protected void loadAdditional(@Nonnull CompoundTag tag, @Nonnull HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         readEnchData(tag, registries.lookupOrThrow(Registries.ENCHANTMENT));
+        this.ensureConfigApplied();
     }
 
     @Override
@@ -319,6 +372,56 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
                 }
             }
         }
+        this.ensureConfigApplied();
+    }
+
+    private void ensureConfigApplied() {
+        int epoch = Config.getTierConfigEpoch();
+        if (this.lastAppliedConfigEpoch == epoch) {
+            return;
+        }
+        this.lastAppliedConfigEpoch = epoch;
+        boolean changed = this.applyConfigConstraints();
+        if (changed && this.level != null && !this.level.isClientSide) {
+            this.markUpdated();
+        }
+    }
+
+    private boolean applyConfigConstraints() {
+        boolean changed = false;
+        int tierMaxLevel = this.getMaxLevel();
+        long tierMaxPoints = this.getMaxPoints();
+
+        var pointsIt = this.points.object2LongEntrySet().iterator();
+        while (pointsIt.hasNext()) {
+            Object2LongMap.Entry<Holder<Enchantment>> entry = pointsIt.next();
+            if (Config.isBlacklisted(entry.getKey())) {
+                pointsIt.remove();
+                changed = true;
+                continue;
+            }
+            long clamped = Math.max(0L, Math.min(tierMaxPoints, entry.getLongValue()));
+            if (clamped != entry.getLongValue()) {
+                entry.setValue(clamped);
+                changed = true;
+            }
+        }
+
+        var levelIt = this.maxLevels.object2IntEntrySet().iterator();
+        while (levelIt.hasNext()) {
+            Object2IntMap.Entry<Holder<Enchantment>> entry = levelIt.next();
+            if (Config.isBlacklisted(entry.getKey())) {
+                levelIt.remove();
+                changed = true;
+                continue;
+            }
+            int clamped = Math.max(0, Math.min(tierMaxLevel, entry.getIntValue()));
+            if (clamped != entry.getIntValue()) {
+                entry.setValue(clamped);
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -358,6 +461,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // Suppressed: vanilla Object2LongMap (fastutil) return type lacks @Nonnull
     @SuppressWarnings("null")
     public Object2LongMap<Holder<Enchantment>> getPoints() {
+        this.ensureConfigApplied();
         return Object2LongMaps.unmodifiable(this.points);
     }
 
@@ -365,15 +469,16 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // Suppressed: vanilla Object2IntMap (fastutil) return type lacks @Nonnull
     @SuppressWarnings("null")
     public Object2IntMap<Holder<Enchantment>> getMaxLevels() {
+        this.ensureConfigApplied();
         return Object2IntMaps.unmodifiable(this.maxLevels);
     }
 
     public int getMaxLevel() {
-        return this.maxLevel;
+        return Config.getTierLimits(this.tier).maxLevel();
     }
 
     public long getMaxPoints() {
-        return this.maxPoints;
+        return Config.getTierLimits(this.tier).maxPoints();
     }
 
     @Nonnull
@@ -465,7 +570,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         // @Nonnull
         @SuppressWarnings("null")
         public Tier1Tile(@Nonnull BlockPos pos, @Nonnull BlockState state) {
-            super(ModRegistry.BLOCK_ENTITY_TIER1.get(), pos, state, Tier.TIER1.maxLevel);
+            super(ModRegistry.BLOCK_ENTITY_TIER1.get(), pos, state, Tier.TIER1);
         }
     }
 
@@ -474,7 +579,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         // @Nonnull
         @SuppressWarnings("null")
         public Tier2Tile(@Nonnull BlockPos pos, @Nonnull BlockState state) {
-            super(ModRegistry.BLOCK_ENTITY_TIER2.get(), pos, state, Tier.TIER2.maxLevel);
+            super(ModRegistry.BLOCK_ENTITY_TIER2.get(), pos, state, Tier.TIER2);
         }
     }
 
@@ -483,7 +588,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         // @Nonnull
         @SuppressWarnings("null")
         public Tier3Tile(@Nonnull BlockPos pos, @Nonnull BlockState state) {
-            super(ModRegistry.BLOCK_ENTITY_TIER3.get(), pos, state, Tier.TIER3.maxLevel);
+            super(ModRegistry.BLOCK_ENTITY_TIER3.get(), pos, state, Tier.TIER3);
         }
     }
 }

@@ -21,5 +21,7 @@
   "tooltip.enchlib.return_book_desc": "Deposits back the enchanted book in the %s slot.",
   "tooltip.enchlib.output_slot_name": "OUTPUT",
   "tooltip.enchlib.shift_info": "Hold Shift for more information.",
-  "tooltip.enchlib.not_enchanted": "Not Enchanted"
+  "tooltip.enchlib.not_enchanted": "Not Enchanted",
+  "tooltip.enchlib.disenchant": "Disenchant",
+  "tooltip.enchlib.disenchant_desc": "§c§lDestroys§r the enchanted item from the %s slot and stores the enchantments in the Library.\nEnchanted books are ignored."
 }

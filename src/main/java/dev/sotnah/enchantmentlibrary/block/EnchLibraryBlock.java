@@ -8,6 +8,8 @@ import javax.annotation.Nullable;
 
 import com.mojang.serialization.MapCodec;
 
+
+import dev.sotnah.enchantmentlibrary.Config;
 import dev.sotnah.enchantmentlibrary.ModRegistry;
 import dev.sotnah.enchantmentlibrary.component.LibraryData;
 import net.minecraft.ChatFormatting;
@@ -34,8 +36,6 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.material.MapColor;
-import net.minecraft.world.level.storage.loot.LootParams;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -53,8 +53,8 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
             int maxLevel) {
         super(BlockBehaviour.Properties.of()
                 .mapColor(MapColor.COLOR_RED)
-                .strength(maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.maxLevel ? 5.0F
-                        : (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.maxLevel ? 4.0F : 3.0F), 1200.0F)
+                .strength(maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel ? 5.0F
+                        : (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel ? 4.0F : 3.0F), 1200.0F)
                 .requiresCorrectToolForDrops());
         this.tileType = tileType;
         this.maxLevel = maxLevel;
@@ -66,9 +66,9 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
                     com.mojang.serialization.Codec.INT.fieldOf("max_level").forGetter(EnchLibraryBlock::getMaxLevel))
                     .apply(inst, maxLevel -> {
                         Supplier<? extends BlockEntityType<? extends EnchLibraryBlockEntity>> tileType = () -> {
-                            if (maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.maxLevel)
+                            if (maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel)
                                 return ModRegistry.BLOCK_ENTITY_TIER3.get();
-                            if (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.maxLevel)
+                            if (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel)
                                 return ModRegistry.BLOCK_ENTITY_TIER2.get();
                             return ModRegistry.BLOCK_ENTITY_TIER1.get();
                         };
@@ -146,24 +146,6 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
 
     @Override
     @Nonnull
-    // Suppressed: vanilla LootContextParams, ItemStack, DataComponentType accessors
-    // lack @Nonnull
-    @SuppressWarnings("null")
-    public List<ItemStack> getDrops(@Nonnull BlockState state, @Nonnull LootParams.Builder ctx) {
-        // Respect requiresCorrectToolForDrops(): only drop if the tool is appropriate
-        ItemStack tool = ctx.getOptionalParameter(LootContextParams.TOOL);
-        if (tool == null || !tool.isCorrectToolForDrops(state)) {
-            return List.of();
-        }
-
-        ItemStack stack = new ItemStack(this);
-        BlockEntity be = ctx.getParameter(LootContextParams.BLOCK_ENTITY);
-        saveDataToItem(stack, be);
-        return List.of(stack);
-    }
-
-    @Override
-    @Nonnull
     public ItemStack getCloneItemStack(@Nonnull BlockState state, @Nonnull HitResult target, @Nonnull LevelReader level,
             @Nonnull BlockPos pos, @Nonnull Player player) {
         BlockEntity be = level.getBlockEntity(pos);
@@ -201,14 +183,21 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
 
     // ── Tooltip ────────────────────────────────────────────────────────────────
 
+    public EnchLibraryBlockEntity.Tier getTier() {
+        if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel) return EnchLibraryBlockEntity.Tier.TIER3;
+        if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel) return EnchLibraryBlockEntity.Tier.TIER2;
+        return EnchLibraryBlockEntity.Tier.TIER1;
+    }
+
     @Override
     // Suppressed: vanilla String.valueOf and DataComponentType from
     // LIBRARY_DATA.get() lack @Nonnull
     @SuppressWarnings("null")
     public void appendHoverText(@Nonnull ItemStack stack, @Nonnull Item.TooltipContext context,
             @Nonnull List<Component> list, @Nonnull TooltipFlag flag) {
+        int currentConfigMaxLevel = Config.getTierLimits(this.getTier()).maxLevel();
         list.add(Component.translatable("tooltip.enchlib.capacity",
-                Component.literal(String.valueOf(this.maxLevel))).withStyle(ChatFormatting.GOLD));
+                Component.literal(String.valueOf(currentConfigMaxLevel))).withStyle(ChatFormatting.GOLD));
 
         LibraryData data = stack.get(ModRegistry.LIBRARY_DATA.get());
         if (data != null) {

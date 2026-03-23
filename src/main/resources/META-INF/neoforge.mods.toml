@@ -6,7 +6,7 @@ license = "MIT"
 modId = "enchantmentlibrary"
 version = "${version}"
 logoFile="logo.png"
-displayName = "Enchantment Library (Standalone)"
+displayName = "Enchantment Library Standalone"
 description = '''A standalone Enchantment Library block that stores and extracts enchantments.'''
 
 [[dependencies.enchantmentlibrary]]

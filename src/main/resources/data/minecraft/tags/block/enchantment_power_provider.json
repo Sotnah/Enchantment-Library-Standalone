@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "enchantmentlibrary:library_tier1",
+    "enchantmentlibrary:library_tier2",
+    "enchantmentlibrary:library_tier3"
+  ]
+}

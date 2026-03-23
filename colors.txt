@@ -1,0 +1,17 @@
+&0  - Black - §0 - 000000
+&1  - Dark Blue - §1 - 0000AA
+&2  - Dark Green - §2 - 00AA00
+&3  - Dark Aqua - §3 - 00AAAA
+&4  - Dark Red - §4 - AA0000
+&5  - Dark Purple - §5 - AA00AA
+&6  - Gold - §6 - FFAA00
+&7  - Gray - §7 - AAAAAA
+&8  - Dark Gray - §8 - 555555
+&9  - Blue - §9 - 5555FF
+&a  - Green - §a - 55FF55
+&b  - Aqua - §b - 55FFFF
+&c  - Red - §c - FF5555
+&d  - Light Purple - §d - FF55FF
+&e  - Yellow - §e - FFFF55
+&f  - White - §f - FFFFFF
+&g  - Minecoin Gold - §g - DDD605
