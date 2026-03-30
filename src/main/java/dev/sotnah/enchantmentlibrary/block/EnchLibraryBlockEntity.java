@@ -21,10 +21,11 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderLookup.RegistryLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -34,8 +35,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 
 public abstract class EnchLibraryBlockEntity extends BlockEntity {
 
@@ -55,7 +56,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     protected final Object2LongMap<Holder<Enchantment>> points = new Object2LongOpenHashMap<>();
     protected final Object2IntMap<Holder<Enchantment>> maxLevels = new Object2IntOpenHashMap<>();
     protected final Set<EnchLibraryMenu> activeMenus = ConcurrentHashMap.newKeySet();
-    protected final IItemHandler itemHandler = new EnchLibItemHandler();
+    protected final ResourceHandler<ItemResource> itemHandler = new EnchLibItemHandler();
 
     protected final Tier tier;
     private int lastAppliedConfigEpoch = Integer.MIN_VALUE;
@@ -251,13 +252,13 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      */
     @Nonnull
     public LibraryData toLibraryData() {
-        Object2LongMap<ResourceLocation> pts = new Object2LongOpenHashMap<>();
+        Object2LongMap<Identifier> pts = new Object2LongOpenHashMap<>();
         for (Object2LongMap.Entry<Holder<Enchantment>> e : this.points.object2LongEntrySet()) {
-            e.getKey().unwrapKey().ifPresent(key -> pts.put(key.location(), e.getLongValue()));
+            e.getKey().unwrapKey().ifPresent(key -> pts.put(key.identifier(), e.getLongValue()));
         }
-        Object2IntMap<ResourceLocation> lvls = new Object2IntOpenHashMap<>();
+        Object2IntMap<Identifier> lvls = new Object2IntOpenHashMap<>();
         for (Object2IntMap.Entry<Holder<Enchantment>> e : this.maxLevels.object2IntEntrySet()) {
-            e.getKey().unwrapKey().ifPresent(key -> lvls.put(key.location(), e.getIntValue()));
+            e.getKey().unwrapKey().ifPresent(key -> lvls.put(key.identifier(), e.getIntValue()));
         }
         return new LibraryData(pts, lvls);
     }
@@ -266,113 +267,50 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      * Loads a {@link LibraryData} component from an item into this block entity's
      * runtime maps.
      */
-    // Suppressed: vanilla ResourceKey/ResourceLocation factory methods lack
+    // Suppressed: vanilla ResourceKey/Identifier factory methods lack
     // @Nonnull; outputs are guaranteed non-null
     @SuppressWarnings("null")
     public void loadLibraryData(@Nonnull LibraryData data, @Nonnull RegistryLookup<Enchantment> lookup) {
         this.points.clear();
         this.maxLevels.clear();
         data.points().forEach((loc, val) -> lookup.get(ResourceKey.create(Registries.ENCHANTMENT, loc))
-                .ifPresent(holder -> this.points.put(holder, val.longValue())));
+                .ifPresent(holder -> this.points.put(holder, val)));
         data.maxLevels().forEach((loc, val) -> lookup.get(ResourceKey.create(Registries.ENCHANTMENT, loc))
-                .ifPresent(holder -> this.maxLevels.put(holder, val.intValue())));
+                .ifPresent(holder -> this.maxLevels.put(holder, val)));
         this.ensureConfigApplied();
     }
 
     // ── BlockEntity NBT (world save/load) ──────────────────────────────────────
 
     @Override
-    protected void saveAdditional(@Nonnull CompoundTag tag, @Nonnull HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
-        writeEnchData(tag, registries);
+    protected void saveAdditional(@Nonnull ValueOutput output) {
+        super.saveAdditional(output);
+        writeEnchData(output);
     }
 
     @Override
-    // Suppressed: vanilla Registries.ENCHANTMENT and RegistryLookup.lookupOrThrow
-    // lack @Nonnull
     @SuppressWarnings("null")
-    protected void loadAdditional(@Nonnull CompoundTag tag, @Nonnull HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
-        readEnchData(tag, registries.lookupOrThrow(Registries.ENCHANTMENT));
+    protected void loadAdditional(@Nonnull ValueInput input) {
+        super.loadAdditional(input);
+        readEnchData(input, input.lookup().lookupOrThrow(Registries.ENCHANTMENT));
         this.ensureConfigApplied();
     }
 
-    @Override
-    @Nonnull
-    // Suppressed: vanilla CompoundTag from super.getUpdateTag() lacks @Nonnull
-    @SuppressWarnings("null")
-    public CompoundTag getUpdateTag(@Nonnull HolderLookup.Provider registries) {
-        CompoundTag tag = super.getUpdateTag(registries);
-        writeEnchData(tag, registries);
-        return tag;
+    protected void collectUpdateData(@Nonnull ValueOutput output, @Nonnull HolderLookup.Provider registries) {
+        // Calling super.collectUpdateData is removed as it's not in the base class for this build.
+        // writeEnchData is called for data synchronization.
+        writeEnchData(output);
     }
 
-    @Override
-    public ClientboundBlockEntityDataPacket getUpdatePacket() {
-        return ClientboundBlockEntityDataPacket.create(this);
+    @SuppressWarnings("null")
+    private void writeEnchData(@Nonnull ValueOutput output) {
+        output.store("library_data", LibraryData.CODEC, this.toLibraryData());
     }
 
-    @Override
-    // Suppressed: vanilla Registries.ENCHANTMENT and RegistryLookup.lookupOrThrow
-    // lack @Nonnull
+    // Suppressed: ResourceKey.create and Identifier.tryParse lack @Nonnull
     @SuppressWarnings("null")
-    public void onDataPacket(
-            @Nonnull net.minecraft.network.Connection connection,
-            @Nonnull ClientboundBlockEntityDataPacket packet,
-            @Nonnull net.minecraft.core.HolderLookup.Provider registries) {
-        CompoundTag tag = packet.getTag();
-        if (tag != null) {
-            readEnchData(tag, registries.lookupOrThrow(Registries.ENCHANTMENT));
-        }
-        notifyMenus();
-    }
-
-    // Suppressed: vanilla HolderLookup and Holder accessor methods lack @Nonnull
-    @SuppressWarnings("null")
-    private void writeEnchData(@Nonnull CompoundTag tag, @Nonnull HolderLookup.Provider registries) {
-        CompoundTag pointsTag = new CompoundTag();
-        CompoundTag levelsTag = new CompoundTag();
-
-        for (Object2LongMap.Entry<Holder<Enchantment>> e : this.points.object2LongEntrySet()) {
-            e.getKey().unwrapKey().ifPresent(key -> pointsTag.putLong(key.location().toString(), e.getLongValue()));
-        }
-        for (Object2IntMap.Entry<Holder<Enchantment>> e : this.maxLevels.object2IntEntrySet()) {
-            e.getKey().unwrapKey().ifPresent(key -> levelsTag.putInt(key.location().toString(), e.getIntValue()));
-        }
-
-        tag.put("points", pointsTag);
-        tag.put("max_levels", levelsTag);
-    }
-
-    // Suppressed: vanilla ResourceKey.create and ResourceLocation.tryParse lack
-    // @Nonnull
-    @SuppressWarnings("null")
-    private void readEnchData(@Nonnull CompoundTag tag, @Nonnull RegistryLookup<Enchantment> lookup) {
-        this.points.clear();
-        this.maxLevels.clear();
-
-        if (tag.contains("points")) {
-            CompoundTag pointsTag = tag.getCompound("points");
-            for (String key : pointsTag.getAllKeys()) {
-                ResourceLocation loc = ResourceLocation.tryParse(key);
-                if (loc != null) {
-                    lookup.get(ResourceKey.create(Registries.ENCHANTMENT, loc))
-                            .ifPresent(holder -> this.points.put(holder, pointsTag.getLong(key)));
-                }
-            }
-        }
-
-        if (tag.contains("max_levels")) {
-            CompoundTag levelsTag = tag.getCompound("max_levels");
-            for (String key : levelsTag.getAllKeys()) {
-                ResourceLocation loc = ResourceLocation.tryParse(key);
-                if (loc != null) {
-                    lookup.get(ResourceKey.create(Registries.ENCHANTMENT, loc))
-                            .ifPresent(holder -> this.maxLevels.put(holder, levelsTag.getInt(key)));
-                }
-            }
-        }
-        this.ensureConfigApplied();
+    private void readEnchData(@Nonnull ValueInput input, @Nonnull RegistryLookup<Enchantment> lookup) {
+        input.read("library_data", LibraryData.CODEC).ifPresent(data -> this.loadLibraryData(data, lookup));
     }
 
     private void ensureConfigApplied() {
@@ -382,7 +320,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         }
         this.lastAppliedConfigEpoch = epoch;
         boolean changed = this.applyConfigConstraints();
-        if (changed && this.level != null && !this.level.isClientSide) {
+        if (changed && this.level != null && !this.level.isClientSide()) {
             this.markUpdated();
         }
     }
@@ -430,7 +368,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // lack @Nonnull
     @SuppressWarnings("null")
     private void syncToClient() {
-        if (this.level != null && !this.level.isClientSide) {
+        if (this.level != null && !this.level.isClientSide()) {
             this.level.sendBlockUpdated(this.worldPosition, this.getBlockState(), this.getBlockState(),
                     Block.UPDATE_CLIENTS);
         }
@@ -482,88 +420,55 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     }
 
     @Nonnull
-    // Suppressed: vanilla IItemHandler interface return type lacks @Nonnull
     @SuppressWarnings("null")
-    public IItemHandler getItemHandler() {
+    public ResourceHandler<ItemResource> getItemHandler() {
         return this.itemHandler;
     }
 
-    // ── IItemHandler (hopper support) ──────────────────────────────────────────
+    // ── ResourceHandler (hopper support) ──────────────────────────────────────
 
-    private class EnchLibItemHandler implements IItemHandlerModifiable {
-
-        private ItemStack stack = ItemStack.EMPTY;
-
+    private class EnchLibItemHandler implements ResourceHandler<ItemResource> {
         @Override
-        public int getSlots() {
+        public int size() {
             return 1;
         }
 
         @Override
-        @Nonnull
-        // Suppressed: vanilla ItemStack.EMPTY field lacks @Nonnull
-        @SuppressWarnings("null")
-        public ItemStack getStackInSlot(int slot) {
-            return this.stack;
+        public ItemResource getResource(int slot) {
+            return ItemResource.of(net.minecraft.world.item.ItemStack.EMPTY);
         }
 
         @Override
-        public void setStackInSlot(int slot, @Nonnull ItemStack stack) {
-            this.stack = stack;
+        public long getAmountAsLong(int slot) {
+            return 0;
         }
 
-        /**
-         * Acts as a "deposit chute" for automated systems (like hoppers).
-         * Enchanted books inserted here are immediately consumed and converted to
-         * points,
-         * rather than being stored in a physical slot. This keeps the handler logically
-         * "empty"
-         * even during rapid insertion.
-         */
         @Override
-        @Nonnull
-        // Suppressed: vanilla Items.ENCHANTED_BOOK and ItemStack.EMPTY lack @Nonnull
-        @SuppressWarnings("null")
-        public ItemStack insertItem(int slot, @Nonnull ItemStack stack, boolean simulate) {
-            // Validation: Only slot 0, non-empty enchanted books, and respect our own slot
-            // limit
-            if (slot != 0 || stack.isEmpty() || !stack.is(Items.ENCHANTED_BOOK) || !this.stack.isEmpty())
-                return stack;
+        public long getCapacityAsLong(int slot, ItemResource resource) {
+            return 1;
+        }
 
-            // We behave as a slot with limit 1: accept 1, return the rest.
-            ItemStack remainder = stack.copy();
-            remainder.shrink(1);
+        @Override
+        public boolean isValid(int slot, ItemResource resource) {
+            return resource.getItem() == Items.ENCHANTED_BOOK;
+        }
 
-            if (!simulate) {
-                ItemStack toDeposit = stack.copyWithCount(1);
-                EnchLibraryBlockEntity.this.depositBook(toDeposit);
+        @Override
+        public int insert(int slot, ItemResource resource, int amount, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+            if (slot != 0 || amount <= 0 || resource.getItem() != Items.ENCHANTED_BOOK) {
+                return 0;
             }
-
-            return remainder.isEmpty() ? ItemStack.EMPTY : remainder;
-        }
-
-        @Override
-        @Nonnull
-        // Suppressed: vanilla ItemStack.EMPTY field lacks @Nonnull
-        @SuppressWarnings("null")
-        public ItemStack extractItem(int slot, int amount, boolean simulate) {
-            return ItemStack.EMPTY;
-        }
-
-        @Override
-        public int getSlotLimit(int slot) {
+            ItemStack toDeposit = resource.toStack(1);
+            EnchLibraryBlockEntity.this.depositBook(toDeposit);
+            EnchLibraryBlockEntity.this.setChanged();
             return 1;
         }
 
         @Override
-        // Suppressed: vanilla Items.ENCHANTED_BOOK field lacks @Nonnull
-        @SuppressWarnings("null")
-        public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
-            return stack.is(Items.ENCHANTED_BOOK);
+        public int extract(int slot, ItemResource resource, int amount, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+            return 0;
         }
     }
-
-    // ── Tier Implementations ───────────────────────────────────────────────────
 
     public static class Tier1Tile extends EnchLibraryBlockEntity {
         // Suppressed: ModRegistry.BLOCK_ENTITY_TIER1.get() (DeferredHolder) lacks

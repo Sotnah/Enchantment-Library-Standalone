@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.80'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
 base {
@@ -12,12 +12,6 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(project.properties.javaV
 
 neoForge {
     version = project.properties.forgeVersion
-
-    parchment {
-        def split = "${parchmentVersion}".split('-')
-        minecraftVersion = split[1]
-        mappingsVersion = split[0]
-    }
 
     mods {
         create("${modid}") {
@@ -52,7 +46,11 @@ dependencies {
 }
 
 tasks.named('processResources', ProcessResources).configure {
-    var replaceProperties = [version: version]
+    var replaceProperties = [
+            version     : project.version,
+            mcVersion   : project.properties.mcVersion,
+            forgeVersion: project.properties.forgeVersion
+    ]
     inputs.properties replaceProperties
     filesMatching('META-INF/neoforge.mods.toml') {
         expand replaceProperties

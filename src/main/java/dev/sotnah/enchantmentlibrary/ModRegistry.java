@@ -10,6 +10,7 @@ import dev.sotnah.enchantmentlibrary.block.EnchLibraryMenu;
 import dev.sotnah.enchantmentlibrary.component.LibraryData;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
@@ -18,8 +19,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -46,16 +45,15 @@ public final class ModRegistry {
         public static final DeferredRegister.DataComponents DATA_COMPONENTS = DeferredRegister
                         .createDataComponents(Registries.DATA_COMPONENT_TYPE, EnchantmentLibraryMod.MOD_ID);
         @SuppressWarnings("null")
-        public static final DeferredRegister<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> LOOT_CONDITIONS = DeferredRegister
+        public static final DeferredRegister<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>> LOOT_CONDITIONS = DeferredRegister
                         .create(Registries.LOOT_CONDITION_TYPE, EnchantmentLibraryMod.MOD_ID);
 
         // ── Custom Loot Conditions ─────────────────────────────────────────────────
 
-        @SuppressWarnings("null")
-        public static final DeferredHolder<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType, net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> PRESERVE_LIBRARY_DATA = LOOT_CONDITIONS
+        @SuppressWarnings({"null", "unchecked"})
+        public static final DeferredHolder<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>, com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>> PRESERVE_LIBRARY_DATA = LOOT_CONDITIONS
                         .register("preserve_library_data",
-                                        () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
-                                                        dev.sotnah.enchantmentlibrary.loot.PreserveLibraryDataCondition.CODEC));
+                                        () -> (com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>) dev.sotnah.enchantmentlibrary.loot.PreserveLibraryDataCondition.CODEC);
 
 
         // ── Data Components ────────────────────────────────────────────────────────
@@ -69,40 +67,44 @@ public final class ModRegistry {
         // ── Blocks ─────────────────────────────────────────────────────────────────
 
         public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER1 = BLOCKS.register("library_tier1",
-                        () -> blockTier1());
+                        registryName -> blockTier1(registryName));
 
         public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER2 = BLOCKS.register("library_tier2",
-                        () -> blockTier2());
+                        registryName -> blockTier2(registryName));
 
         public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER3 = BLOCKS.register("library_tier3",
-                        () -> blockTier3());
+                        registryName -> blockTier3(registryName));
 
         // ── Block Entities ─────────────────────────────────────────────────────────
-        // Helper methods are used so that forward references to LIBRARY_TIERx fields
-        // are resolved via method bodies instead of field initializers (JLS §8.3.3).
 
-        public static final Supplier<BlockEntityType<EnchLibraryBlockEntity.Tier1Tile>> BLOCK_ENTITY_TIER1 = BLOCK_ENTITIES
-                        .register("library_tier1", () -> beTier1());
-
-        public static final Supplier<BlockEntityType<EnchLibraryBlockEntity.Tier2Tile>> BLOCK_ENTITY_TIER2 = BLOCK_ENTITIES
-                        .register("library_tier2", () -> beTier2());
-
-        public static final Supplier<BlockEntityType<EnchLibraryBlockEntity.Tier3Tile>> BLOCK_ENTITY_TIER3 = BLOCK_ENTITIES
-                        .register("library_tier3", () -> beTier3());
+        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier1Tile>> BLOCK_ENTITY_TIER1 = BLOCK_ENTITIES
+                        .register("library_tier1", () -> new BlockEntityType<>(
+                                        EnchLibraryBlockEntity.Tier1Tile::new, LIBRARY_TIER1.get()));
+ 
+        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier2Tile>> BLOCK_ENTITY_TIER2 = BLOCK_ENTITIES
+                        .register("library_tier2", () -> new BlockEntityType<>(
+                                        EnchLibraryBlockEntity.Tier2Tile::new, LIBRARY_TIER2.get()));
+ 
+        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier3Tile>> BLOCK_ENTITY_TIER3 = BLOCK_ENTITIES
+                        .register("library_tier3", () -> new BlockEntityType<>(
+                                        EnchLibraryBlockEntity.Tier3Tile::new, LIBRARY_TIER3.get()));
 
         // ── Items ──────────────────────────────────────────────────────────────────
 
         @SuppressWarnings("null")
         public static final DeferredHolder<Item, BlockItem> ITEM_TIER1 = ITEMS.register("library_tier1",
-                        () -> new BlockItem(LIBRARY_TIER1.get(), new Item.Properties()));
+                        registryName -> new BlockItem(LIBRARY_TIER1.get(),
+                                        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))));
 
         @SuppressWarnings("null")
         public static final DeferredHolder<Item, BlockItem> ITEM_TIER2 = ITEMS.register("library_tier2",
-                        () -> new BlockItem(LIBRARY_TIER2.get(), new Item.Properties()));
+                        registryName -> new BlockItem(LIBRARY_TIER2.get(),
+                                        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))));
 
         @SuppressWarnings("null")
         public static final DeferredHolder<Item, BlockItem> ITEM_TIER3 = ITEMS.register("library_tier3",
-                        () -> new BlockItem(LIBRARY_TIER3.get(), new Item.Properties()));
+                        registryName -> new BlockItem(LIBRARY_TIER3.get(),
+                                        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))));
 
         // ── Menu ───────────────────────────────────────────────────────────────────
 
@@ -134,61 +136,28 @@ public final class ModRegistry {
                 BLOCK_ENTITIES.register(bus);
                 MENUS.register(bus);
                 TABS.register(bus);
-                bus.addListener(ModRegistry::registerCapabilities);
-        }
-
-        // Suppressed: vanilla Capabilities.ItemHandler.BLOCK and DeferredHolder.get()
-        // lack @Nonnull
-        @SuppressWarnings("null")
-        private static void registerCapabilities(RegisterCapabilitiesEvent event) {
-                event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, BLOCK_ENTITY_TIER1.get(),
-                                (be, side) -> be.getItemHandler());
-                event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, BLOCK_ENTITY_TIER2.get(),
-                                (be, side) -> be.getItemHandler());
-                event.registerBlockEntity(Capabilities.ItemHandler.BLOCK, BLOCK_ENTITY_TIER3.get(),
-                                (be, side) -> be.getItemHandler());
         }
 
         // ── Helpers (avoid forward-reference in field initializers, JLS §8.3.3) ──
 
-        private static EnchLibraryBlock blockTier1() {
-                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER1.get(),
+        private static EnchLibraryBlock blockTier1(net.minecraft.resources.Identifier registryName) {
+                return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
+                                () -> BLOCK_ENTITY_TIER1.get(),
                                 EnchLibraryBlockEntity.Tier.TIER1.defaultMaxLevel);
         }
 
-        private static EnchLibraryBlock blockTier2() {
-                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER2.get(),
+        private static EnchLibraryBlock blockTier2(net.minecraft.resources.Identifier registryName) {
+                return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
+                                () -> BLOCK_ENTITY_TIER2.get(),
                                 EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel);
         }
 
-        private static EnchLibraryBlock blockTier3() {
-                return new EnchLibraryBlock(() -> BLOCK_ENTITY_TIER3.get(),
+        private static EnchLibraryBlock blockTier3(net.minecraft.resources.Identifier registryName) {
+                return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
+                                () -> BLOCK_ENTITY_TIER3.get(),
                                 EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel);
         }
 
-        // Suppressed: DataFixer null is intentional — standard NeoForge BlockEntityType
-        // registration pattern
-        @SuppressWarnings("null")
-        private static BlockEntityType<EnchLibraryBlockEntity.Tier1Tile> beTier1() {
-                return BlockEntityType.Builder
-                                .of(EnchLibraryBlockEntity.Tier1Tile::new, LIBRARY_TIER1.get()).build(null);
-        }
-
-        // Suppressed: DataFixer null is intentional — standard NeoForge BlockEntityType
-        // registration pattern
-        @SuppressWarnings("null")
-        private static BlockEntityType<EnchLibraryBlockEntity.Tier2Tile> beTier2() {
-                return BlockEntityType.Builder
-                                .of(EnchLibraryBlockEntity.Tier2Tile::new, LIBRARY_TIER2.get()).build(null);
-        }
-
-        // Suppressed: DataFixer null is intentional — standard NeoForge BlockEntityType
-        // registration pattern
-        @SuppressWarnings("null")
-        private static BlockEntityType<EnchLibraryBlockEntity.Tier3Tile> beTier3() {
-                return BlockEntityType.Builder
-                                .of(EnchLibraryBlockEntity.Tier3Tile::new, LIBRARY_TIER3.get()).build(null);
-        }
 
         private ModRegistry() {
         }

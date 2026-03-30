@@ -8,14 +8,15 @@ import javax.annotation.Nullable;
 
 import com.mojang.serialization.MapCodec;
 
-
 import dev.sotnah.enchantmentlibrary.Config;
 import dev.sotnah.enchantmentlibrary.ModRegistry;
 import dev.sotnah.enchantmentlibrary.component.LibraryData;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
@@ -49,9 +50,11 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     // Suppressed: vanilla BlockBehaviour.Properties, BlockState, DirectionProperty
     // lack @Nonnull
     @SuppressWarnings("null")
-    public EnchLibraryBlock(@Nonnull Supplier<? extends BlockEntityType<? extends EnchLibraryBlockEntity>> tileType,
+    public EnchLibraryBlock(@Nonnull ResourceKey<Block> blockKey,
+            @Nonnull Supplier<? extends BlockEntityType<? extends EnchLibraryBlockEntity>> tileType,
             int maxLevel) {
         super(BlockBehaviour.Properties.of()
+                .setId(blockKey)
                 .mapColor(MapColor.COLOR_RED)
                 .strength(maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel ? 5.0F
                         : (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel ? 4.0F : 3.0F), 1200.0F)
@@ -72,7 +75,13 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
                                 return ModRegistry.BLOCK_ENTITY_TIER2.get();
                             return ModRegistry.BLOCK_ENTITY_TIER1.get();
                         };
-                        return new EnchLibraryBlock(tileType, maxLevel);
+                        // Codec reconstruction: use a placeholder key — registry will assign the real one
+                        ResourceKey<Block> placeholderKey = maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel
+                                ? ModRegistry.LIBRARY_TIER3.getKey()
+                                : (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel
+                                        ? ModRegistry.LIBRARY_TIER2.getKey()
+                                        : ModRegistry.LIBRARY_TIER1.getKey());
+                        return new EnchLibraryBlock(placeholderKey, tileType, maxLevel);
                     }));
 
     @Override
@@ -117,13 +126,13 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
         if (player.isSpectator()) {
             return InteractionResult.CONSUME;
         }
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) {
                 player.openMenu(provider, pos);
             }
         }
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return InteractionResult.SUCCESS;
     }
 
     @Override
@@ -146,8 +155,7 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
 
     @Override
     @Nonnull
-    public ItemStack getCloneItemStack(@Nonnull BlockState state, @Nonnull HitResult target, @Nonnull LevelReader level,
-            @Nonnull BlockPos pos, @Nonnull Player player) {
+    public ItemStack getCloneItemStack(@Nonnull LevelReader level, @Nonnull BlockPos pos, @Nonnull BlockState state, boolean includeData, @Nonnull Player player) {
         BlockEntity be = level.getBlockEntity(pos);
         if (be == null) {
             return new ItemStack(this);
@@ -187,25 +195,6 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
         if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel) return EnchLibraryBlockEntity.Tier.TIER3;
         if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel) return EnchLibraryBlockEntity.Tier.TIER2;
         return EnchLibraryBlockEntity.Tier.TIER1;
-    }
-
-    @Override
-    // Suppressed: vanilla String.valueOf and DataComponentType from
-    // LIBRARY_DATA.get() lack @Nonnull
-    @SuppressWarnings("null")
-    public void appendHoverText(@Nonnull ItemStack stack, @Nonnull Item.TooltipContext context,
-            @Nonnull List<Component> list, @Nonnull TooltipFlag flag) {
-        int currentConfigMaxLevel = Config.getTierLimits(this.getTier()).maxLevel();
-        list.add(Component.translatable("tooltip.enchlib.capacity",
-                Component.literal(String.valueOf(currentConfigMaxLevel))).withStyle(ChatFormatting.GOLD));
-
-        LibraryData data = stack.get(ModRegistry.LIBRARY_DATA.get());
-        if (data != null) {
-            int count = data.storedEnchantmentCount();
-            if (count > 0) {
-                list.add(Component.translatable("tooltip.enchlib.item", count).withStyle(ChatFormatting.GRAY));
-            }
-        }
     }
 
     public int getMaxLevel() {

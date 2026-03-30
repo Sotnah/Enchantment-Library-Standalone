@@ -1,0 +1,20 @@
+allprojects {
+    task printMethods {
+        doLast {
+            URL[] urls = configurations.compileClasspath.collect { it.toURI().toURL() } as URL[]
+            URLClassLoader cl = new URLClassLoader(urls, null)
+            def sb = new StringBuilder()
+            def classesToFind = ['net.neoforged.neoforge.transfer.transaction.TransactionContext', 'net.neoforged.neoforge.transfer.transaction.Transaction']
+            classesToFind.each { className ->
+                try {
+                    def clazz = cl.loadClass(className)
+                    sb.append("METHODS FOR " + className + ":\n")
+                    clazz.getMethods().each { sb.append("  " + it + "\n") }
+                } catch(Exception e) {
+                    sb.append("Failed for " + className + ": " + e + "\n")
+                }
+            }
+            new File(rootProject.projectDir, "methods_out.txt").write(sb.toString())
+        }
+    }
+}

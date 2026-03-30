@@ -8,9 +8,11 @@ import org.slf4j.Logger;
 import com.mojang.logging.LogUtils;
 
 import dev.sotnah.enchantmentlibrary.ModRegistry;
+import dev.sotnah.enchantmentlibrary.Config;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -62,7 +64,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             this.tile.activeMenus.add(this);
         } else {
             this.tile = null;
-            if (!this.level.isClientSide) {
+            if (!this.level.isClientSide()) {
                 LOGGER.warn("EnchLibraryMenu created with null/invalid tile at {}", pos);
                 throw new IllegalStateException("Menu opened without valid block entity at " + pos);
             }
@@ -103,7 +105,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                     return;
                 super.setChanged();
                 ItemStack stack = this.getItem();
-                if (!self.level.isClientSide && !stack.isEmpty() && self.tile != null) {
+                if (!self.level.isClientSide() && !stack.isEmpty() && self.tile != null) {
                     try {
                         depositing = true;
                         ItemStack toDeposit = stack.copyWithCount(1);
@@ -189,23 +191,15 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     // ── Button Click Handling ──────────────────────────────────────────────────
 
     @Override
-    // Suppressed: vanilla registry.getHolder and ItemStack constructors lack
-    // @Nonnull
-    @SuppressWarnings("null")
     public boolean clickMenuButton(@Nonnull Player player, int id) {
         if (this.tile == null)
             return false;
 
-        boolean requireXp = dev.sotnah.enchantmentlibrary.Config.requireXpForExtraction.get();
-        boolean isCreative = player.isCreative();
-        int currentTotalXp = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getPlayerTotalXp(player);
-
-        // Return button (-1) - Returns the item in output slot to the library
+        // Return button (-1)
         if (id == -1) {
             ItemStack outputSlotItem = this.ioInv.getItem(OUTPUT_SLOT);
             if (!outputSlotItem.isEmpty() && outputSlotItem.is(Items.ENCHANTED_BOOK)) {
-                // Refund entire book XP
-                if (requireXp && !isCreative) {
+                if (Config.requireXpForExtraction.get() && !player.isCreative()) {
                     int totalRefundXp = 0;
                     net.minecraft.world.item.enchantment.ItemEnchantments enchantments = EnchantmentHelper
                             .getEnchantmentsForCrafting(outputSlotItem);
@@ -217,7 +211,6 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                         dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, totalRefundXp);
                     }
                 }
-
                 this.tile.depositBook(outputSlotItem);
                 this.ioInv.setItem(OUTPUT_SLOT, ItemStack.EMPTY);
                 return true;
@@ -225,42 +218,56 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             return false;
         }
 
-        // Disenchant button (-2) - Deposits enchantments from the filter slot into this library
+        // Disenchant button (-2)
         if (id == DISENCHANT_ID) {
-            if (!dev.sotnah.enchantmentlibrary.Config.enableDisenchantButton.get()) {
-                return false;
-            }
+            if (!Config.enableDisenchantButton.get()) return false;
             ItemStack filterItem = this.ioInv.getItem(FILTER_SLOT);
-            if (filterItem.isEmpty() || filterItem.is(Items.ENCHANTED_BOOK)) {
-                return false;
-            }
+            if (filterItem.isEmpty() || filterItem.is(Items.ENCHANTED_BOOK)) return false;
+            if (EnchantmentHelper.getEnchantmentsForCrafting(filterItem).isEmpty()) return false;
 
-            if (EnchantmentHelper.getEnchantmentsForCrafting(filterItem).isEmpty()) {
-                return false;
-            }
-
-            // Dupe prevention: clear slot first, then deposit using the removed stack.
             ItemStack toDeposit = filterItem.copy();
             this.ioInv.setItem(FILTER_SLOT, ItemStack.EMPTY);
             this.tile.depositEnchantsFromItem(toDeposit);
-            // Success SFX: play two sounds together.
-            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE,
-                    SoundSource.BLOCKS, 1.0F, 1.0F);
-            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.TRIDENT_RETURN,
-                    SoundSource.PLAYERS, 1.0F, 1.0F);
+            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 1.0F, 1.0F);
+            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.TRIDENT_RETURN, SoundSource.PLAYERS, 1.0F, 1.0F);
             return true;
         }
 
+        // Legacy handling for enchantment selection (via integer ID)
+        int enchId = id & ID_MASK;
         boolean shift = (id & SHIFT_FLAG) != 0;
         boolean ctrl = (id & CTRL_FLAG) != 0;
-        int enchId = id & ID_MASK;
 
-        var registry = this.level.registryAccess()
-                .registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
-        Holder.Reference<Enchantment> ench = registry.getHolder(enchId).orElse(null);
-        if (ench == null)
-            return false;
+        var lookup = this.level.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT);
+        var keys = lookup.listElementIds().toList();
+        if (enchId >= 0 && enchId < keys.size()) {
+            lookup.get(keys.get(enchId)).ifPresent(ench -> this.processEnchantmentAction(ench, shift, ctrl));
+            return true;
+        }
+        
+        return false;
+    }
 
+    /**
+     * Handler for the new custom networking packet. Resolves the identifier
+     * to a stable Holder and processes the action.
+     */
+    public void handleEnchantmentSelection(net.minecraft.resources.Identifier loc, boolean shift, boolean ctrl) {
+        if (this.tile == null) return;
+        var lookup = this.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+        lookup.get(net.minecraft.resources.ResourceKey.create(Registries.ENCHANTMENT, loc))
+                .ifPresent(ench -> this.processEnchantmentAction(ench, shift, ctrl));
+    }
+
+    /**
+     * Unified logic for enchantment extraction/refunding.
+     */
+    private boolean processEnchantmentAction(@Nonnull Holder.Reference<Enchantment> ench, boolean shift, boolean ctrl) {
+        if (this.tile == null) return false;
+
+        boolean requireXp = Config.requireXpForExtraction.get();
+        boolean isCreative = this.player.isCreative();
+        int currentTotalXp = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getPlayerTotalXp(this.player);
         ItemStack output = this.ioInv.getItem(OUTPUT_SLOT);
 
         // Refund logic (Ctrl or Shift+Ctrl)
@@ -275,7 +282,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                     this.tile.refundEnchant(ench, output, shift);
 
                     if (requireXp && !isCreative && refundXp > 0) {
-                        dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, refundXp);
+                        dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(this.player, refundXp);
                     }
 
                     if (EnchantmentHelper.getEnchantmentsForCrafting(output).isEmpty()) {
@@ -287,7 +294,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             return false;
         }
 
-        // Pre-check extraction validity before modifying the slot (prevents dupe)
+        // Extraction Logic
         int currentLevel = EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(ench);
         int targetLevel;
 
@@ -302,22 +309,16 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                 }
                 targetLevel++;
             }
-            if (targetLevel == currentLevel) {
-                return false;
-            }
+            if (targetLevel == currentLevel) return false;
         } else {
             targetLevel = currentLevel + 1;
         }
 
-        if (!this.tile.canExtract(ench, targetLevel, currentLevel)) {
-            return false;
-        }
+        if (!this.tile.canExtract(ench, targetLevel, currentLevel)) return false;
 
         int xpCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel)
                 - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel);
-        if (requireXp && !isCreative && currentTotalXp < xpCost) {
-            return false;
-        }
+        if (requireXp && !isCreative && currentTotalXp < xpCost) return false;
 
         boolean freshBook = output.isEmpty();
         if (freshBook) {
@@ -335,7 +336,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         }
 
         if (requireXp && !isCreative && xpCost > 0) {
-            dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, -xpCost);
+            dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(this.player, -xpCost);
         }
 
         return true;

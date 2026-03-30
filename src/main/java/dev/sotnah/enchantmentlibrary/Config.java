@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.sotnah.enchantmentlibrary.block.EnchLibraryBlockEntity;
 import net.minecraft.core.Holder;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
@@ -43,7 +43,7 @@ public class Config {
 
     // Optimization: Epoch increases only when inventory re-validation is strictly required (tier levels/points or blacklist changes).
     private static final AtomicInteger TIER_CONFIG_EPOCH = new AtomicInteger(0);
-    private static final Set<ResourceLocation> BLACKLIST_CACHE = new HashSet<>();
+    private static volatile Set<Identifier> BLACKLIST_CACHE = Set.of();
 
     /**
      * Immutable snapshot of tier limits to ensure zero overhead on repeated calls.
@@ -51,17 +51,13 @@ public class Config {
     public record TierLimitsRecord(int maxLevel, long maxPoints) {
     }
 
-    private static final java.util.Map<EnchLibraryBlockEntity.Tier, TierLimitsRecord> TIER_LIMITS_SNAPSHOT = new java.util.EnumMap<>(
-            EnchLibraryBlockEntity.Tier.class);
-
-    static {
-        TIER_LIMITS_SNAPSHOT.put(EnchLibraryBlockEntity.Tier.TIER1, new TierLimitsRecord(
-                LibraryConstants.DEFAULT_TIER1_MAX_LEVEL, LibraryConstants.DEFAULT_TIER1_MAX_POINTS));
-        TIER_LIMITS_SNAPSHOT.put(EnchLibraryBlockEntity.Tier.TIER2, new TierLimitsRecord(
-                LibraryConstants.DEFAULT_TIER2_MAX_LEVEL, LibraryConstants.DEFAULT_TIER2_MAX_POINTS));
-        TIER_LIMITS_SNAPSHOT.put(EnchLibraryBlockEntity.Tier.TIER3, new TierLimitsRecord(
-                LibraryConstants.DEFAULT_TIER3_MAX_LEVEL, LibraryConstants.DEFAULT_TIER3_MAX_POINTS));
-    }
+    private static volatile java.util.Map<EnchLibraryBlockEntity.Tier, TierLimitsRecord> TIER_LIMITS_SNAPSHOT = java.util.Map.of(
+            EnchLibraryBlockEntity.Tier.TIER1, new TierLimitsRecord(
+                    LibraryConstants.DEFAULT_TIER1_MAX_LEVEL, LibraryConstants.DEFAULT_TIER1_MAX_POINTS),
+            EnchLibraryBlockEntity.Tier.TIER2, new TierLimitsRecord(
+                    LibraryConstants.DEFAULT_TIER2_MAX_LEVEL, LibraryConstants.DEFAULT_TIER2_MAX_POINTS),
+            EnchLibraryBlockEntity.Tier.TIER3, new TierLimitsRecord(
+                    LibraryConstants.DEFAULT_TIER3_MAX_LEVEL, LibraryConstants.DEFAULT_TIER3_MAX_POINTS));
 
     // --- Initialization ---
     static {
@@ -89,7 +85,7 @@ public class Config {
         enchantmentBlacklist = BUILDER
                 .comment(
                         "Blacklist of enchantment ids (e.g. minecraft:sharpness). Blacklisted enchants are not storable/extractable. If an enchantment in the library is blacklisted, it will be deleted from the library.")
-                .defineList("enchantmentBlacklist", List.of(), Config::isValidResourceLocationString);
+                .defineList("enchantmentBlacklist", List.of(), Config::isValidIdentifierString);
 
         tier1MaxLevel = BUILDER.comment("Max enchantment level storable/extractable in tier 1 library.")
                 .defineInRange("tier1MaxLevel", LibraryConstants.DEFAULT_TIER1_MAX_LEVEL, 1, 50);
@@ -110,8 +106,8 @@ public class Config {
         SPEC = BUILDER.build();
     }
 
-    private static boolean isValidResourceLocationString(Object value) {
-        return value instanceof String str && ResourceLocation.tryParse(str) != null;
+    private static boolean isValidIdentifierString(Object value) {
+        return value instanceof String str && Identifier.tryParse(str) != null;
     }
 
     // --- Event Listeners ---
@@ -134,37 +130,27 @@ public class Config {
     public static void rebuildCaches() {
         boolean criticalConfigChanged = false;
 
-        TierLimitsRecord newT1 = new TierLimitsRecord(tier1MaxLevel.get(), tier1MaxPoints.get());
-        if (!newT1.equals(TIER_LIMITS_SNAPSHOT.get(EnchLibraryBlockEntity.Tier.TIER1))) {
-            TIER_LIMITS_SNAPSHOT.put(EnchLibraryBlockEntity.Tier.TIER1, newT1);
+        java.util.Map<EnchLibraryBlockEntity.Tier, TierLimitsRecord> newLimits = new java.util.EnumMap<>(EnchLibraryBlockEntity.Tier.class);
+        newLimits.put(EnchLibraryBlockEntity.Tier.TIER1, new TierLimitsRecord(tier1MaxLevel.get(), tier1MaxPoints.get()));
+        newLimits.put(EnchLibraryBlockEntity.Tier.TIER2, new TierLimitsRecord(tier2MaxLevel.get(), tier2MaxPoints.get()));
+        newLimits.put(EnchLibraryBlockEntity.Tier.TIER3, new TierLimitsRecord(tier3MaxLevel.get(), tier3MaxPoints.get()));
+
+        if (!newLimits.equals(TIER_LIMITS_SNAPSHOT)) {
+            TIER_LIMITS_SNAPSHOT = java.util.Collections.unmodifiableMap(newLimits);
             criticalConfigChanged = true;
         }
 
-        TierLimitsRecord newT2 = new TierLimitsRecord(tier2MaxLevel.get(), tier2MaxPoints.get());
-        if (!newT2.equals(TIER_LIMITS_SNAPSHOT.get(EnchLibraryBlockEntity.Tier.TIER2))) {
-            TIER_LIMITS_SNAPSHOT.put(EnchLibraryBlockEntity.Tier.TIER2, newT2);
-            criticalConfigChanged = true;
-        }
-
-        TierLimitsRecord newT3 = new TierLimitsRecord(tier3MaxLevel.get(), tier3MaxPoints.get());
-        if (!newT3.equals(TIER_LIMITS_SNAPSHOT.get(EnchLibraryBlockEntity.Tier.TIER3))) {
-            TIER_LIMITS_SNAPSHOT.put(EnchLibraryBlockEntity.Tier.TIER3, newT3);
-            criticalConfigChanged = true;
-        }
-
-        synchronized (BLACKLIST_CACHE) {
-            Set<ResourceLocation> newBlacklist = new HashSet<>();
-            for (String raw : enchantmentBlacklist.get()) {
-                ResourceLocation id = ResourceLocation.tryParse(raw);
-                if (id != null) {
-                    newBlacklist.add(id);
-                }
+        Set<Identifier> newBlacklist = new HashSet<>();
+        for (String raw : enchantmentBlacklist.get()) {
+            Identifier id = Identifier.tryParse(raw);
+            if (id != null) {
+                newBlacklist.add(id);
             }
-            if (!BLACKLIST_CACHE.equals(newBlacklist)) {
-                BLACKLIST_CACHE.clear();
-                BLACKLIST_CACHE.addAll(newBlacklist);
-                criticalConfigChanged = true;
-            }
+        }
+        
+        if (!newBlacklist.equals(BLACKLIST_CACHE)) {
+            BLACKLIST_CACHE = Set.copyOf(newBlacklist);
+            criticalConfigChanged = true;
         }
 
         if (criticalConfigChanged) {
@@ -183,12 +169,10 @@ public class Config {
     }
 
     public static boolean isBlacklisted(Holder<Enchantment> enchantment) {
-        ResourceLocation id = enchantment.unwrapKey().map(key -> key.location()).orElse(null);
+        Identifier id = enchantment.unwrapKey().map(key -> key.identifier()).orElse(null);
         if (id == null) {
             return false;
         }
-        synchronized (BLACKLIST_CACHE) {
-            return BLACKLIST_CACHE.contains(id);
-        }
+        return BLACKLIST_CACHE.contains(id);
     }
 }

@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[4,)"
+loaderVersion = "[5,)"
 license = "MIT"
 
 [[mods]]
@@ -12,13 +12,13 @@ description = '''A standalone Enchantment Library block that stores and extracts
 [[dependencies.enchantmentlibrary]]
 modId = "neoforge"
 type = "required"
-versionRange = "[21.1,)"
+versionRange = "[26.1,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.enchantmentlibrary]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.1,)"
+versionRange = "[1.21.4,)"
 ordering = "NONE"
 side = "BOTH"

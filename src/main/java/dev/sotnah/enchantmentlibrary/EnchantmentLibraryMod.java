@@ -16,7 +16,21 @@ public class EnchantmentLibraryMod {
         ModRegistry.register(modBus);
         container.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         
-        // NeoForge 1.21.1+ prefers adding listeners directly rather than using @EventBusSubscriber for better performance
+        // Register networking payload
+        modBus.addListener(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent.class, event -> {
+            final net.neoforged.neoforge.network.registration.PayloadRegistrar registrar = event.registrar(EnchantmentLibraryMod.MOD_ID);
+            registrar.playToServer(
+                dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload.TYPE,
+                dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload.STREAM_CODEC,
+                (payload, ctx) -> {
+                    if (ctx.player().containerMenu instanceof dev.sotnah.enchantmentlibrary.block.EnchLibraryMenu menu) {
+                        menu.handleEnchantmentSelection(payload.enchantmentId(), payload.shift(), payload.ctrl());
+                    }
+                }
+            );
+        });
+
+        // NeoForge 1.21.1+ prefers adding listeners directly
         modBus.addListener(Config::onConfigLoad);
         modBus.addListener(Config::onConfigReload);
     }

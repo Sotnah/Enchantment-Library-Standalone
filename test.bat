@@ -1,0 +1,1 @@
+.\gradlew.bat clean build --debug --stacktrace --parallel --no-daemon
