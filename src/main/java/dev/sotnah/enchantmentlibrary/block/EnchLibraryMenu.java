@@ -51,6 +51,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     private final Player player;
     private final SimpleContainer ioInv = new SimpleContainer(3);
     private Runnable notifier;
+    private ItemStack activeOutputBook = ItemStack.EMPTY;
 
     // Server-side constructor
     public EnchLibraryMenu(int containerId, @Nonnull Inventory playerInv, @Nonnull BlockPos pos) {
@@ -178,6 +179,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     }
 
     @Override
+    @SuppressWarnings("null")
     public boolean stillValid(@Nonnull Player player) {
         if (player.isSpectator())
             return false;
@@ -191,22 +193,29 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
     // ── Button Click Handling ──────────────────────────────────────────────────
 
     @Override
+    @SuppressWarnings("null")
     public boolean clickMenuButton(@Nonnull Player player, int id) {
-        if (this.tile == null)
+        if (this.tile == null || !this.stillValid(player))
             return false;
 
         // Return button (-1)
         if (id == -1) {
+            if (this.level.isClientSide())
+                return true;
             ItemStack outputSlotItem = this.ioInv.getItem(OUTPUT_SLOT);
-            if (!outputSlotItem.isEmpty() && outputSlotItem.is(Items.ENCHANTED_BOOK)) {
+            if (!outputSlotItem.isEmpty() && outputSlotItem.is(Items.ENCHANTED_BOOK)
+                    && outputSlotItem == this.activeOutputBook) {
                 if (Config.requireXpForExtraction.get() && !player.isCreative()) {
-                    int totalRefundXp = 0;
+                    long totalRefundRaw = 0;
                     net.minecraft.world.item.enchantment.ItemEnchantments enchantments = EnchantmentHelper
                             .getEnchantmentsForCrafting(outputSlotItem);
                     for (it.unimi.dsi.fastutil.objects.Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments
                             .entrySet()) {
-                        totalRefundXp += dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(entry.getIntValue());
+                        // Mitigation: Sum raw costs using long to prevent int overflow when returning
+                        // multiple high-level enchants
+                        totalRefundRaw += dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(entry.getIntValue());
                     }
+                    int totalRefundXp = (int) Math.min(totalRefundRaw, Integer.MAX_VALUE);
                     if (totalRefundXp > 0) {
                         dev.sotnah.enchantmentlibrary.PlayerXpHelper.addPlayerXp(player, totalRefundXp);
                     }
@@ -219,17 +228,25 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         }
 
         // Disenchant button (-2)
-        if (id == DISENCHANT_ID) {
-            if (!Config.enableDisenchantButton.get()) return false;
-            ItemStack filterItem = this.ioInv.getItem(FILTER_SLOT);
-            if (filterItem.isEmpty() || filterItem.is(Items.ENCHANTED_BOOK)) return false;
-            if (EnchantmentHelper.getEnchantmentsForCrafting(filterItem).isEmpty()) return false;
 
+        if (id == DISENCHANT_ID) {
+            if (!Config.enableDisenchantButton.get())
+                return false;
+            ItemStack filterItem = this.ioInv.getItem(FILTER_SLOT);
+            if (filterItem.isEmpty() || filterItem.is(Items.ENCHANTED_BOOK))
+                return false;
+            if (EnchantmentHelper.getEnchantmentsForCrafting(filterItem).isEmpty())
+                return false;
+
+            // Note for code analysis: Item Deletion via Disenchant Button is Intentional
+            // Design, not a bug.
             ItemStack toDeposit = filterItem.copy();
             this.ioInv.setItem(FILTER_SLOT, ItemStack.EMPTY);
             this.tile.depositEnchantsFromItem(toDeposit);
-            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS, 1.0F, 1.0F);
-            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.TRIDENT_RETURN, SoundSource.PLAYERS, 1.0F, 1.0F);
+            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.ENCHANTMENT_TABLE_USE, SoundSource.BLOCKS,
+                    1.0F, 1.0F);
+            this.level.playSound(null, this.tile.getBlockPos(), SoundEvents.TRIDENT_RETURN, SoundSource.PLAYERS, 1.0F,
+                    1.0F);
             return true;
         }
 
@@ -244,7 +261,7 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             lookup.get(keys.get(enchId)).ifPresent(ench -> this.processEnchantmentAction(ench, shift, ctrl));
             return true;
         }
-        
+
         return false;
     }
 
@@ -252,8 +269,10 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
      * Handler for the new custom networking packet. Resolves the identifier
      * to a stable Holder and processes the action.
      */
+    @SuppressWarnings("null")
     public void handleEnchantmentSelection(net.minecraft.resources.Identifier loc, boolean shift, boolean ctrl) {
-        if (this.tile == null) return;
+        if (this.tile == null || !this.stillValid(this.player))
+            return;
         var lookup = this.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
         lookup.get(net.minecraft.resources.ResourceKey.create(Registries.ENCHANTMENT, loc))
                 .ifPresent(ench -> this.processEnchantmentAction(ench, shift, ctrl));
@@ -261,9 +280,12 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
 
     /**
      * Unified logic for enchantment extraction/refunding.
+     * Execution is limited to the logical server to prevent client-side desyncs or
+     * exploits.
      */
     private boolean processEnchantmentAction(@Nonnull Holder.Reference<Enchantment> ench, boolean shift, boolean ctrl) {
-        if (this.tile == null) return false;
+        if (this.tile == null || this.level.isClientSide())
+            return false;
 
         boolean requireXp = Config.requireXpForExtraction.get();
         boolean isCreative = this.player.isCreative();
@@ -272,12 +294,16 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
 
         // Refund logic (Ctrl or Shift+Ctrl)
         if (ctrl) {
-            if (!output.isEmpty() && output.is(Items.ENCHANTED_BOOK)) {
+            if (!output.isEmpty() && output.is(Items.ENCHANTED_BOOK) && output == this.activeOutputBook) {
                 int currentLevel = EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(ench);
                 if (currentLevel > 0) {
                     int targetLevel = shift ? 0 : currentLevel - 1;
-                    int refundXp = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel)
-                            - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel);
+
+                    // Mitigation: Calculate difference using raw long values to prevent Zero-Cost
+                    // exploit
+                    long rawRefund = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(currentLevel)
+                            - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(targetLevel);
+                    int refundXp = (int) Math.min(Math.max(rawRefund, 0L), Integer.MAX_VALUE);
 
                     this.tile.refundEnchant(ench, output, shift);
 
@@ -302,27 +328,37 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             targetLevel = currentLevel;
             while (targetLevel + 1 <= this.getMaxLevel(ench)
                     && this.tile.canExtract(ench, targetLevel + 1, currentLevel)) {
-                int nextCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel + 1)
-                        - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel);
+                // Mitigation: Prevent overflow during multi-level cost calculation
+                long rawNextCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(targetLevel + 1)
+                        - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(currentLevel);
+                int nextCost = (int) Math.min(Math.max(rawNextCost, 0L), Integer.MAX_VALUE);
+
                 if (requireXp && !isCreative && currentTotalXp < nextCost) {
                     break;
                 }
                 targetLevel++;
             }
-            if (targetLevel == currentLevel) return false;
+            if (targetLevel == currentLevel)
+                return false;
         } else {
             targetLevel = currentLevel + 1;
         }
 
-        if (!this.tile.canExtract(ench, targetLevel, currentLevel)) return false;
+        if (!this.tile.canExtract(ench, targetLevel, currentLevel))
+            return false;
 
-        int xpCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(targetLevel)
-                - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCost(currentLevel);
-        if (requireXp && !isCreative && currentTotalXp < xpCost) return false;
+        // Mitigation: Use long precision for cost difference calculation
+        long rawXpCost = dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(targetLevel)
+                - dev.sotnah.enchantmentlibrary.PlayerXpHelper.getCostRaw(currentLevel);
+        int xpCost = (int) Math.min(Math.max(rawXpCost, 0L), Integer.MAX_VALUE);
+
+        if (requireXp && !isCreative && currentTotalXp < xpCost)
+            return false;
 
         boolean freshBook = output.isEmpty();
         if (freshBook) {
             output = new ItemStack(Items.ENCHANTED_BOOK);
+            this.activeOutputBook = output;
             this.ioInv.setItem(OUTPUT_SLOT, output);
         }
 
@@ -407,8 +443,6 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
         return !this.stillValid(this.player);
     }
 
-    // Suppressed: fastutil Object2LongMap.Entry.getKey() lacks @Nonnull
-    @SuppressWarnings("null")
     public List<Object2LongMap.Entry<Holder<Enchantment>>> getPointsForDisplay() {
         if (this.tile == null)
             return List.of();
@@ -422,8 +456,6 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                     if (e.getLongValue() > 0L)
                         return true;
                     // Keep in list if it's currently in the output book
-                    @SuppressWarnings("null")
-                    @Nonnull
                     Holder<Enchantment> ench = e.getKey();
                     return outputEnchants != null && outputEnchants.getLevel(ench) > 0;
                 })

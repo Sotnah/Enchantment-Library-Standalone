@@ -1,7 +1,5 @@
 package dev.sotnah.enchantmentlibrary;
 
-import java.util.function.Supplier;
-
 import javax.annotation.Nonnull;
 
 import dev.sotnah.enchantmentlibrary.block.EnchLibraryBlock;
@@ -24,141 +22,179 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModRegistry {
 
-        // ── Registers ──────────────────────────────────────────────────────────────
+    // ── Registers ──────────────────────────────────────────────────────────────
 
-        @SuppressWarnings("null")
-        public static final DeferredRegister.Blocks BLOCKS = DeferredRegister
-                        .createBlocks(EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
-        public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
-        public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister
-                        .create(Registries.BLOCK_ENTITY_TYPE, EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
-        public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU,
-                        EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
-        public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(
-                        Registries.CREATIVE_MODE_TAB,
-                        EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
-        public static final DeferredRegister.DataComponents DATA_COMPONENTS = DeferredRegister
-                        .createDataComponents(Registries.DATA_COMPONENT_TYPE, EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
-        public static final DeferredRegister<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>> LOOT_CONDITIONS = DeferredRegister
-                        .create(Registries.LOOT_CONDITION_TYPE, EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister.Blocks BLOCKS = DeferredRegister
+            .createBlocks(EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister
+            .create(Registries.BLOCK_ENTITY_TYPE, EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU,
+            EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(
+            Registries.CREATIVE_MODE_TAB,
+            EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister.DataComponents DATA_COMPONENTS = DeferredRegister
+            .createDataComponents(Registries.DATA_COMPONENT_TYPE, EnchantmentLibraryMod.MOD_ID);
+    public static final DeferredRegister<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>> LOOT_CONDITIONS = DeferredRegister
+            .create(Registries.LOOT_CONDITION_TYPE, EnchantmentLibraryMod.MOD_ID);
 
-        // ── Custom Loot Conditions ─────────────────────────────────────────────────
+    // ── Custom Loot Conditions ─────────────────────────────────────────────────
 
-        @SuppressWarnings({"null", "unchecked"})
-        public static final DeferredHolder<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>, com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>> PRESERVE_LIBRARY_DATA = LOOT_CONDITIONS
-                        .register("preserve_library_data",
-                                        () -> (com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>) dev.sotnah.enchantmentlibrary.loot.PreserveLibraryDataCondition.CODEC);
+    public static final DeferredHolder<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>, com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>> PRESERVE_LIBRARY_DATA = LOOT_CONDITIONS
+            .register("preserve_library_data",
+                    () -> (com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.storage.loot.predicates.LootItemCondition>) dev.sotnah.enchantmentlibrary.loot.PreserveLibraryDataCondition.CODEC);
 
+    // ── Data Components ────────────────────────────────────────────────────────
 
-        // ── Data Components ────────────────────────────────────────────────────────
+    public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>, net.minecraft.core.component.DataComponentType<LibraryData>> LIBRARY_DATA = DATA_COMPONENTS
+            .registerComponentType("library_data",
+                    builder -> builder.persistent(LibraryData.CODEC)
+                            .networkSynchronized(LibraryData.STREAM_CODEC));
 
-        @SuppressWarnings("null")
-        public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>, net.minecraft.core.component.DataComponentType<LibraryData>> LIBRARY_DATA = DATA_COMPONENTS
-                        .registerComponentType("library_data",
-                                        builder -> builder.persistent(LibraryData.CODEC)
-                                                        .networkSynchronized(LibraryData.STREAM_CODEC));
+    // ── Blocks ─────────────────────────────────────────────────────────────────
 
-        // ── Blocks ─────────────────────────────────────────────────────────────────
+    public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER1 = BLOCKS.register("library_tier1",
+            registryName -> blockTier1(registryName));
 
-        public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER1 = BLOCKS.register("library_tier1",
-                        registryName -> blockTier1(registryName));
+    public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER2 = BLOCKS.register("library_tier2",
+            registryName -> blockTier2(registryName));
 
-        public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER2 = BLOCKS.register("library_tier2",
-                        registryName -> blockTier2(registryName));
+    public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER3 = BLOCKS.register("library_tier3",
+            registryName -> blockTier3(registryName));
 
-        public static final DeferredHolder<Block, EnchLibraryBlock> LIBRARY_TIER3 = BLOCKS.register("library_tier3",
-                        registryName -> blockTier3(registryName));
+    // ── Block Entities ─────────────────────────────────────────────────────────
 
-        // ── Block Entities ─────────────────────────────────────────────────────────
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier1Tile>> BLOCK_ENTITY_TIER1 = BLOCK_ENTITIES
+            .register("library_tier1", () -> new BlockEntityType<>(
+                    EnchLibraryBlockEntity.Tier1Tile::new, LIBRARY_TIER1.get()));
 
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier1Tile>> BLOCK_ENTITY_TIER1 = BLOCK_ENTITIES
-                        .register("library_tier1", () -> new BlockEntityType<>(
-                                        EnchLibraryBlockEntity.Tier1Tile::new, LIBRARY_TIER1.get()));
- 
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier2Tile>> BLOCK_ENTITY_TIER2 = BLOCK_ENTITIES
-                        .register("library_tier2", () -> new BlockEntityType<>(
-                                        EnchLibraryBlockEntity.Tier2Tile::new, LIBRARY_TIER2.get()));
- 
-        public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier3Tile>> BLOCK_ENTITY_TIER3 = BLOCK_ENTITIES
-                        .register("library_tier3", () -> new BlockEntityType<>(
-                                        EnchLibraryBlockEntity.Tier3Tile::new, LIBRARY_TIER3.get()));
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier2Tile>> BLOCK_ENTITY_TIER2 = BLOCK_ENTITIES
+            .register("library_tier2", () -> new BlockEntityType<>(
+                    EnchLibraryBlockEntity.Tier2Tile::new, LIBRARY_TIER2.get()));
 
-        // ── Items ──────────────────────────────────────────────────────────────────
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EnchLibraryBlockEntity.Tier3Tile>> BLOCK_ENTITY_TIER3 = BLOCK_ENTITIES
+            .register("library_tier3", () -> new BlockEntityType<>(
+                    EnchLibraryBlockEntity.Tier3Tile::new, LIBRARY_TIER3.get()));
 
-        @SuppressWarnings("null")
-        public static final DeferredHolder<Item, BlockItem> ITEM_TIER1 = ITEMS.register("library_tier1",
-                        registryName -> new BlockItem(LIBRARY_TIER1.get(),
-                                        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))));
+    // ── Items ──────────────────────────────────────────────────────────────────
 
-        @SuppressWarnings("null")
-        public static final DeferredHolder<Item, BlockItem> ITEM_TIER2 = ITEMS.register("library_tier2",
-                        registryName -> new BlockItem(LIBRARY_TIER2.get(),
-                                        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))));
+    public static final DeferredHolder<Item, BlockItem> ITEM_TIER1 = ITEMS.register("library_tier1",
+            registryName -> new BlockItem(LIBRARY_TIER1.get(),
+                    new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))) {
+                @Override
+                @SuppressWarnings("deprecation")
+                public void appendHoverText(net.minecraft.world.item.ItemStack stack,
+                        net.minecraft.world.item.Item.TooltipContext context,
+                        net.minecraft.world.item.component.TooltipDisplay display,
+                        java.util.function.Consumer<Component> tooltipComponents,
+                        net.minecraft.world.item.TooltipFlag tooltipFlag) {
+                    super.appendHoverText(stack, context, display, tooltipComponents, tooltipFlag);
+                    tooltipComponents.accept(Component.translatable("tooltip.enchlib.tier", 1)
+                            .withStyle(net.minecraft.ChatFormatting.GRAY));
+                    tooltipComponents.accept(Component
+                            .translatable("tooltip.enchlib.max_level",
+                                    dev.sotnah.enchantmentlibrary.Config
+                                            .getTierLimits(EnchLibraryBlockEntity.Tier.TIER1).maxLevel())
+                            .withStyle(net.minecraft.ChatFormatting.DARK_GREEN));
+                }
+            });
 
-        @SuppressWarnings("null")
-        public static final DeferredHolder<Item, BlockItem> ITEM_TIER3 = ITEMS.register("library_tier3",
-                        registryName -> new BlockItem(LIBRARY_TIER3.get(),
-                                        new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))));
+    public static final DeferredHolder<Item, BlockItem> ITEM_TIER2 = ITEMS.register("library_tier2",
+            registryName -> new BlockItem(LIBRARY_TIER2.get(),
+                    new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))) {
+                @Override
+                @SuppressWarnings("deprecation")
+                public void appendHoverText(net.minecraft.world.item.ItemStack stack,
+                        net.minecraft.world.item.Item.TooltipContext context,
+                        net.minecraft.world.item.component.TooltipDisplay display,
+                        java.util.function.Consumer<Component> tooltipComponents,
+                        net.minecraft.world.item.TooltipFlag tooltipFlag) {
+                    super.appendHoverText(stack, context, display, tooltipComponents, tooltipFlag);
+                    tooltipComponents.accept(Component.translatable("tooltip.enchlib.tier", 2)
+                            .withStyle(net.minecraft.ChatFormatting.GRAY));
+                    tooltipComponents.accept(Component
+                            .translatable("tooltip.enchlib.max_level",
+                                    dev.sotnah.enchantmentlibrary.Config
+                                            .getTierLimits(EnchLibraryBlockEntity.Tier.TIER2).maxLevel())
+                            .withStyle(net.minecraft.ChatFormatting.DARK_GREEN));
+                }
+            });
 
-        // ── Menu ───────────────────────────────────────────────────────────────────
+    public static final DeferredHolder<Item, BlockItem> ITEM_TIER3 = ITEMS.register("library_tier3",
+            registryName -> new BlockItem(LIBRARY_TIER3.get(),
+                    new Item.Properties().setId(ResourceKey.create(Registries.ITEM, registryName))) {
+                @Override
+                @SuppressWarnings("deprecation")
+                public void appendHoverText(net.minecraft.world.item.ItemStack stack,
+                        net.minecraft.world.item.Item.TooltipContext context,
+                        net.minecraft.world.item.component.TooltipDisplay display,
+                        java.util.function.Consumer<Component> tooltipComponents,
+                        net.minecraft.world.item.TooltipFlag tooltipFlag) {
+                    super.appendHoverText(stack, context, display, tooltipComponents, tooltipFlag);
+                    tooltipComponents.accept(Component.translatable("tooltip.enchlib.tier", 3)
+                            .withStyle(net.minecraft.ChatFormatting.GRAY));
+                    tooltipComponents.accept(Component
+                            .translatable("tooltip.enchlib.max_level",
+                                    dev.sotnah.enchantmentlibrary.Config
+                                            .getTierLimits(EnchLibraryBlockEntity.Tier.TIER3).maxLevel())
+                            .withStyle(net.minecraft.ChatFormatting.DARK_GREEN));
+                }
+            });
 
-        public static final DeferredHolder<MenuType<?>, MenuType<EnchLibraryMenu>> LIBRARY_MENU = MENUS.register(
-                        "library",
-                        () -> IMenuTypeExtension.create(EnchLibraryMenu::new));
+    // ── Menu ───────────────────────────────────────────────────────────────────
 
-        // ── Creative Tab ───────────────────────────────────────────────────────────
+    public static final DeferredHolder<MenuType<?>, MenuType<EnchLibraryMenu>> LIBRARY_MENU = MENUS.register(
+            "library",
+            () -> IMenuTypeExtension.create(EnchLibraryMenu::new));
 
-        @SuppressWarnings("null")
-        public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("enchantmentlibrary",
-                        () -> CreativeModeTab.builder()
-                                        .title(Component.translatable("itemGroup.enchantmentlibrary"))
-                                        .icon(() -> ITEM_TIER1.get().getDefaultInstance())
-                                        .displayItems((params, output) -> {
-                                                output.accept(ITEM_TIER1.get());
-                                                output.accept(ITEM_TIER2.get());
-                                                output.accept(ITEM_TIER3.get());
-                                        })
-                                        .build());
+    // ── Creative Tab ───────────────────────────────────────────────────────────
 
-        // ── Registration ───────────────────────────────────────────────────────────
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("enchantmentlibrary",
+            () -> CreativeModeTab.builder()
+                    .title(Component.translatable("itemGroup.enchantmentlibrary"))
+                    .icon(() -> ITEM_TIER1.get().getDefaultInstance())
+                    .displayItems((params, output) -> {
+                        output.accept(ITEM_TIER1.get());
+                        output.accept(ITEM_TIER2.get());
+                        output.accept(ITEM_TIER3.get());
+                    })
+                    .build());
 
-        public static void register(@Nonnull IEventBus bus) {
-                DATA_COMPONENTS.register(bus);
-                LOOT_CONDITIONS.register(bus);
-                BLOCKS.register(bus);
-                ITEMS.register(bus);
-                BLOCK_ENTITIES.register(bus);
-                MENUS.register(bus);
-                TABS.register(bus);
-        }
+    // ── Registration ───────────────────────────────────────────────────────────
 
-        // ── Helpers (avoid forward-reference in field initializers, JLS §8.3.3) ──
+    public static void register(@Nonnull IEventBus bus) {
+        DATA_COMPONENTS.register(bus);
+        LOOT_CONDITIONS.register(bus);
+        BLOCKS.register(bus);
+        ITEMS.register(bus);
+        BLOCK_ENTITIES.register(bus);
+        MENUS.register(bus);
+        TABS.register(bus);
+    }
 
-        private static EnchLibraryBlock blockTier1(net.minecraft.resources.Identifier registryName) {
-                return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
-                                () -> BLOCK_ENTITY_TIER1.get(),
-                                EnchLibraryBlockEntity.Tier.TIER1.defaultMaxLevel);
-        }
+    // ── Helpers (avoid forward-reference in field initializers, JLS §8.3.3) ──
+    @SuppressWarnings("null")
+    private static EnchLibraryBlock blockTier1(net.minecraft.resources.Identifier registryName) {
+        return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
+                () -> BLOCK_ENTITY_TIER1.get(),
+                EnchLibraryBlockEntity.Tier.TIER1.defaultMaxLevel);
+    }
 
-        private static EnchLibraryBlock blockTier2(net.minecraft.resources.Identifier registryName) {
-                return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
-                                () -> BLOCK_ENTITY_TIER2.get(),
-                                EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel);
-        }
+    @SuppressWarnings("null")
+    private static EnchLibraryBlock blockTier2(net.minecraft.resources.Identifier registryName) {
+        return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
+                () -> BLOCK_ENTITY_TIER2.get(),
+                EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel);
+    }
 
-        private static EnchLibraryBlock blockTier3(net.minecraft.resources.Identifier registryName) {
-                return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
-                                () -> BLOCK_ENTITY_TIER3.get(),
-                                EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel);
-        }
+    @SuppressWarnings("null")
+    private static EnchLibraryBlock blockTier3(net.minecraft.resources.Identifier registryName) {
+        return new EnchLibraryBlock(ResourceKey.create(Registries.BLOCK, registryName),
+                () -> BLOCK_ENTITY_TIER3.get(),
+                EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel);
+    }
 
-
-        private ModRegistry() {
-        }
+    private ModRegistry() {
+    }
 }

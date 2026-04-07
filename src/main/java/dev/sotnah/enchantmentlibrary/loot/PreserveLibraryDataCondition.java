@@ -9,11 +9,13 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
+
 public class PreserveLibraryDataCondition implements LootItemCondition {
     public static final PreserveLibraryDataCondition INSTANCE = new PreserveLibraryDataCondition();
     public static final MapCodec<PreserveLibraryDataCondition> CODEC = MapCodec.unit(INSTANCE);
 
-    private PreserveLibraryDataCondition() {}
+    private PreserveLibraryDataCondition() {
+    }
 
     @Override
     public MapCodec<? extends LootItemCondition> codec() {
@@ -21,7 +23,6 @@ public class PreserveLibraryDataCondition implements LootItemCondition {
     }
 
     @Override
-    @SuppressWarnings("null")
     public boolean test(LootContext context) {
         if (Config.keepInventory.get()) {
             return true;

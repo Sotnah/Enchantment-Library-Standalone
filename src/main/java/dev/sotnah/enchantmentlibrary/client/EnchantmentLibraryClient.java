@@ -16,8 +16,6 @@ public class EnchantmentLibraryClient {
         modBus.addListener(this::onRegisterMenuScreens);
     }
 
-    // Suppressed: vanilla ModRegistry.LIBRARY_MENU.get() return type lacks @Nonnull
-    @SuppressWarnings("null")
     private void onRegisterMenuScreens(@Nonnull RegisterMenuScreensEvent event) {
         event.register(ModRegistry.LIBRARY_MENU.get(), EnchLibraryScreen::new);
     }

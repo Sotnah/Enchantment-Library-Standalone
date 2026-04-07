@@ -18,11 +18,19 @@ public record EnchSelectionPayload(Identifier enchantmentId, boolean shift, bool
             Identifier.STREAM_CODEC, EnchSelectionPayload::enchantmentId,
             ByteBufCodecs.BOOL, EnchSelectionPayload::shift,
             ByteBufCodecs.BOOL, EnchSelectionPayload::ctrl,
-            EnchSelectionPayload::new
+            (id, shift, ctrl) -> new EnchSelectionPayload(id, shift, ctrl)
     );
 
     @Override
     public Type<? extends CustomPacketPayload> type() {
         return TYPE;
+    }
+
+    public void handleData(final net.neoforged.neoforge.network.handling.IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (context.player().containerMenu instanceof dev.sotnah.enchantmentlibrary.block.EnchLibraryMenu menu) {
+                menu.handleEnchantmentSelection(this.enchantmentId(), this.shift(), this.ctrl());
+            }
+        });
     }
 }

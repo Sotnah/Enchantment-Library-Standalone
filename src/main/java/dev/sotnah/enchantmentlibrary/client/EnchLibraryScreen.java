@@ -16,10 +16,8 @@ import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.tags.EnchantmentTags;
@@ -42,8 +40,8 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     private static final float SCROLLBAR_RANGE = 90F;
     private static final int SCROLLBAR_DRAG_HEIGHT = 103;
     private static final int PROGRESS_BAR_WIDTH = 85;
-    private static final int ENCH_NAME_COLOR = 0xFFFFFF;
-    private static final int FILTER_TEXT_COLOR = 0xFFFFFF;
+    private static final int ENCH_NAME_COLOR = 0xFFFFFFFF;
+    private static final int FILTER_TEXT_COLOR = 0xFFFFFFFF;
     private static final int RETURN_BTN_X = 143;
     private static final int RETURN_BTN_Y = 116;
     private static final int RETURN_BTN_W = 13;
@@ -78,8 +76,18 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         menu.setNotifier(this::containerChanged);
     }
 
+    private static boolean hasShiftDownA() {
+        com.mojang.blaze3d.platform.Window window = net.minecraft.client.Minecraft.getInstance().getWindow();
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT) ||
+                com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT);
+    }
+
     private static boolean hasControlDownA() {
-        return net.minecraft.client.Minecraft.getInstance().options.keySprint.isDown();
+        com.mojang.blaze3d.platform.Window window = net.minecraft.client.Minecraft.getInstance().getWindow();
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL)
+                ||
+                com.mojang.blaze3d.platform.InputConstants.isKeyDown(window,
+                        org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL);
     }
 
     private boolean isOverReturnButton(double mouseX, double mouseY) {
@@ -100,9 +108,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         pose.popMatrix();
     }
 
-
     // Suppressed: vanilla EditBox, font, Component factories lack @Nonnull
-    @SuppressWarnings("null")
     @Override
     protected void init() {
         super.init();
@@ -117,6 +123,27 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         this.containerChanged();
     }
 
+    // Track tile state to detect server→client updates delivered via
+    // handleUpdateTag
+    private int lastKnownPointCount = -1;
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        // Refresh the enchantment list whenever the tile's data changes on the client.
+        // handleUpdateTag() on the BlockEntity updates the points map; we detect that
+        // here.
+        EnchLibraryBlockEntity tile = this.menu.getTile();
+        int currentCount = tile != null ? tile.getPoints().size() : 0;
+        // Also track sum of points to detect value changes, not just count changes
+        long currentSum = tile != null ? tile.getPoints().values().longStream().sum() : 0L;
+        int signature = currentCount * 31 + (int) (currentSum ^ (currentSum >>> 32));
+        if (signature != this.lastKnownPointCount) {
+            this.lastKnownPointCount = signature;
+            this.containerChanged();
+        }
+    }
+
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
         if (this.filter.isFocused() && event.key() != 256) {
@@ -127,23 +154,31 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     }
 
     @Override
-    public void extractBackground(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY,
+            float partialTick) {
         this.extractTransparentBackground(gfx);
+        // Draw the background texture HERE so slots and items render on top of it.
+        gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, this.leftPos, this.topPos, 0f, 0f,
+                this.imageWidth, this.imageHeight, 307, 256);
     }
 
     @Override
-    public void extractRenderState(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY,
+            float partialTick) {
         super.extractRenderState(gfx, mouseX, mouseY, partialTick);
 
         this.handleCustomTooltips(gfx, mouseX, mouseY);
     }
 
     @Override
-    // Suppressed: vanilla TEXTURE Identifier and GuiGraphicsExtractor.blit lack
+    // Suppressed: vanilla TEXTURE Identifier and GuiGraphics.blit lack
     // @Nonnull
     @SuppressWarnings("null")
-    public void extractContents(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY, float partialTick) {
-        gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, this.leftPos, this.topPos, 0f, 0f, this.imageWidth, this.imageHeight, 307, 256);
+    public void extractContents(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY,
+            float partialTick) {
+        // CRITICAL: super call renders all slots and items (player inventory, hotbar,
+        // etc.)
+        super.extractContents(gfx, mouseX, mouseY, partialTick);
 
         // Button Highlights
         if (isOverReturnButton(mouseX, mouseY)) {
@@ -158,7 +193,8 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         // Scrollbar
         int scrollbarPos = (int) (SCROLLBAR_RANGE * this.scrollOffs);
         boolean isScrollBarActive = this.data.size() > MAX_ENTRIES;
-        gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, this.leftPos + SCROLLBAR_X_OFFSET, this.topPos + SCROLLBAR_TOP_OFFSET + scrollbarPos, 303f,
+        gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, this.leftPos + SCROLLBAR_X_OFFSET,
+                this.topPos + SCROLLBAR_TOP_OFFSET + scrollbarPos, 303f,
                 40f + (isScrollBarActive ? 0 : 12),
                 4, 12, 307, 256);
 
@@ -173,13 +209,14 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
 
     // Suppressed: vanilla TEXTURE Identifier, Enchantment.getFullname, Font
     // and Component lack @Nonnull
-    @SuppressWarnings("null")
-    private void renderEntry(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, @Nonnull LibrarySlot slot, int x, int y, int mouseX,
+    private void renderEntry(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, @Nonnull LibrarySlot slot,
+            int x, int y, int mouseX,
             int mouseY) {
         LibrarySlot hovered = this.getHoveredSlot(mouseX, mouseY);
 
         // Background
-        gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, x, y, 194f, slot == hovered ? ENTRY_HEIGHT : 0f, ENTRY_WIDTH, ENTRY_HEIGHT, 307, 256);
+        gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, x, y, 194f,
+                slot == hovered ? ENTRY_HEIGHT : 0f, ENTRY_WIDTH, ENTRY_HEIGHT, 307, 256);
 
         // Enchantment name (scaled to fit, cached in LibrarySlot)
         Component name = slot.displayName();
@@ -201,21 +238,24 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                 : 0;
         barPixels = Mth.clamp(barPixels, 0, PROGRESS_BAR_WIDTH);
         if (barPixels > 0) {
-            gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, x + 3, y + 14, 197f, 42f, barPixels, 3, 307, 256);
+            gfx.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, TEXTURE, x + 3, y + 14, 197f, 42f,
+                    barPixels, 3, 307, 256);
         }
     }
 
-    // Suppressed: vanilla handleCustomTooltips, Enchantment.getFullname, Component, font
+    // Suppressed: vanilla handleCustomTooltips, Enchantment.getFullname, Component,
+    // font
     // lack @Nonnull
     @SuppressWarnings("null")
-    protected void handleCustomTooltips(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY) {
+    protected void handleCustomTooltips(net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX,
+            int mouseY) {
 
         // Return button tooltip check
         if (isOverReturnButton(mouseX, mouseY)) {
             List<Component> tooltip = new ArrayList<>();
             tooltip.add(Component.translatable("tooltip.enchlib.return_book"));
 
-            if (this.minecraft.options.keyShift.isDown()) {
+            if (hasShiftDownA()) {
                 tooltip.add(Component.translatable("tooltip.enchlib.return_book_desc",
                         Component.translatable("tooltip.enchlib.output_slot_name")
                                 .withStyle(s -> s.withColor(0xFFAA00))));
@@ -262,7 +302,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                 tooltip.add(Component.literal("§c§lDisabled from config."));
             }
 
-            if (this.minecraft.options.keyShift.isDown()) {
+            if (hasShiftDownA()) {
                 Component filterWord = Component.literal("FILTER").withStyle(ChatFormatting.GRAY);
                 tooltip.add(Component.translatable("tooltip.enchlib.disenchant_desc", filterWord));
             } else {
@@ -317,7 +357,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                     : EnchantmentHelper.getEnchantmentsForCrafting(output).getLevel(hovered.ench);
 
             boolean ctrl = hasControlDownA();
-            boolean shift = this.minecraft.options.keyShift.isDown();
+            boolean shift = hasShiftDownA();
             boolean requireXp = Config.requireXpForExtraction.get();
             boolean isCreative = this.minecraft != null && this.minecraft.player != null
                     && this.minecraft.player.isCreative();
@@ -334,7 +374,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
                             - PlayerXpHelper.getCost(nextLevel);
 
                     if (shift) {
-                        MutableComponent removeLine = Component.literal("Removing: ").withStyle(ChatFormatting.GOLD)
+                        MutableComponent removeLine = Component.literal("Refunding: ").withStyle(ChatFormatting.GOLD)
                                 .append(Component.literal("Total").withStyle(ChatFormatting.GREEN))
                                 .append(Component.literal(" / ").withStyle(ChatFormatting.DARK_GRAY))
                                 .append(Component.literal(format(refundAmount) + " Pts")
@@ -456,7 +496,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return super.mouseClicked(event, handled);
     }
 
-    @SuppressWarnings("null")
     private boolean handleReturnButtonClick(double mouseX, double mouseY) {
         if (isOverReturnButton(mouseX, mouseY)) {
             if (this.minecraft != null && this.minecraft.gameMode != null) {
@@ -472,7 +511,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return false;
     }
 
-    @SuppressWarnings("null")
     private boolean handleDisenchantButtonClick(double mouseX, double mouseY) {
         if (isOverDisenchantButton(mouseX, mouseY)) {
             if (!dev.sotnah.enchantmentlibrary.Config.enableDisenchantButton.get()) {
@@ -492,7 +530,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return false;
     }
 
-    @SuppressWarnings("null")
     private boolean handleScrollbarClick(net.minecraft.client.input.MouseButtonEvent event) {
         double mouseX = event.x();
         double mouseY = event.y();
@@ -505,17 +542,17 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return false;
     }
 
-    @SuppressWarnings("null")
     private boolean handleEnchantmentSlotClick(double mouseX, double mouseY) {
         LibrarySlot libSlot = this.getHoveredSlot((int) mouseX, (int) mouseY);
         if (libSlot != null) {
             if (this.minecraft != null && this.minecraft.level != null && this.minecraft.gameMode != null) {
                 libSlot.ench.unwrapKey().ifPresent(key -> {
-                    boolean shift = this.minecraft.options.keyShift.isDown();
+                    boolean shift = hasShiftDownA();
                     boolean ctrl = hasControlDownA();
-                    this.minecraft.getConnection().send(new net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket(
-                        new dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload(key.identifier(), shift, ctrl)
-                    ));
+                    this.minecraft.getConnection()
+                            .send(new net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket(
+                                    new dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload(key.identifier(),
+                                            shift, ctrl)));
                 });
                 if (this.minecraft.getSoundManager() != null) {
                     this.minecraft.getSoundManager().play(
@@ -528,7 +565,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return false;
     }
 
-    @SuppressWarnings("null")
     private boolean handleFilterRightClick(double mouseX, double mouseY, int button) {
         if (button == 1 && this.filter.isMouseOver(mouseX, mouseY)) {
             this.filter.setValue("");
@@ -539,7 +575,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
 
     @Override
     public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dragX, double dragY) {
-        double mouseX = event.x();
         double mouseY = event.y();
         if (this.scrolling && this.data.size() > MAX_ENTRIES) {
             int barTop = this.topPos + SCROLLBAR_TOP_OFFSET;
@@ -572,7 +607,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     // ── Data Refresh ───────────────────────────────────────────────────────────
 
     // Suppressed: vanilla Enchantment, registry, and filter accessors lack @Nonnull
-    @SuppressWarnings("null")
     private void containerChanged() {
         this.data.clear();
 
@@ -674,7 +708,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     }
 
     @Override
-    protected void extractLabels(@Nonnull net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY) {
+    protected void extractLabels(net.minecraft.client.gui.GuiGraphicsExtractor gfx, int mouseX, int mouseY) {
         // suppress vanilla container title + "Inventory" label
     }
 

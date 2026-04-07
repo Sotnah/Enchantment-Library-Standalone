@@ -22,16 +22,12 @@ public class EnchantmentLibraryMod {
             registrar.playToServer(
                 dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload.TYPE,
                 dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload.STREAM_CODEC,
-                (payload, ctx) -> {
-                    if (ctx.player().containerMenu instanceof dev.sotnah.enchantmentlibrary.block.EnchLibraryMenu menu) {
-                        menu.handleEnchantmentSelection(payload.enchantmentId(), payload.shift(), payload.ctrl());
-                    }
-                }
+                dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload::handleData
             );
         });
 
         // NeoForge 1.21.1+ prefers adding listeners directly
-        modBus.addListener(Config::onConfigLoad);
-        modBus.addListener(Config::onConfigReload);
+        modBus.addListener(net.neoforged.fml.event.config.ModConfigEvent.Loading.class, Config::onConfigLoad);
+        modBus.addListener(net.neoforged.fml.event.config.ModConfigEvent.Reloading.class, Config::onConfigReload);
     }
 }

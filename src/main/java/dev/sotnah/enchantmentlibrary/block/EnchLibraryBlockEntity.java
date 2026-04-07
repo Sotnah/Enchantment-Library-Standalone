@@ -58,6 +58,26 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     protected final Set<EnchLibraryMenu> activeMenus = ConcurrentHashMap.newKeySet();
     protected final ResourceHandler<ItemResource> itemHandler = new EnchLibItemHandler();
 
+    protected final net.neoforged.neoforge.transfer.transaction.SnapshotJournal<StateSnapshot> journal = new net.neoforged.neoforge.transfer.transaction.SnapshotJournal<StateSnapshot>() {
+        @Override
+        protected StateSnapshot createSnapshot() {
+            return new StateSnapshot(new Object2LongOpenHashMap<>(points), new Object2IntOpenHashMap<>(maxLevels));
+        }
+
+        @Override
+        protected void revertToSnapshot(StateSnapshot snapshot) {
+            points.clear();
+            points.putAll(snapshot.points);
+            maxLevels.clear();
+            maxLevels.putAll(snapshot.maxLevels);
+            markUpdated();
+        }
+    };
+
+    private record StateSnapshot(Object2LongMap<Holder<Enchantment>> points,
+            Object2IntMap<Holder<Enchantment>> maxLevels) {
+    }
+
     protected final Tier tier;
     private int lastAppliedConfigEpoch = Integer.MIN_VALUE;
 
@@ -75,7 +95,6 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      */
     // Suppressed: vanilla Items constants lack @Nonnull; Items.ENCHANTED_BOOK is
     // never null at runtime
-    @SuppressWarnings("null")
     public void depositBook(@Nonnull ItemStack book) {
         this.ensureConfigApplied();
         if (!book.is(Items.ENCHANTED_BOOK))
@@ -168,7 +187,7 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
 
         this.points.put(ench, Math.max(0L, currentPoints - cost));
 
-        stack.enchant(ench, targetLevel);
+        EnchantmentHelper.updateEnchantments(stack, mut -> mut.set(ench, targetLevel));
 
         this.markUpdated();
         return true;
@@ -194,7 +213,6 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      * Refunds an enchantment level (or points) from an item back into the library.
      */
     // Suppressed: vanilla ItemEnchantments.Mutable.toImmutable() lacks @Nonnull
-    @SuppressWarnings("null")
     public void refundEnchant(@Nonnull Holder<Enchantment> ench, @Nonnull ItemStack stack, boolean all) {
         this.ensureConfigApplied();
         if (Config.isBlacklisted(ench)) {
@@ -220,17 +238,18 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         this.points.put(ench, Math.min(this.getMaxPoints(), newPoints));
 
         // Update the book's enchantments
-        ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(enchantments);
-        if (nextLevel > 0) {
-            mutable.set(ench, nextLevel);
-        } else {
-            mutable.removeIf(h -> h.equals(ench));
-        }
-        EnchantmentHelper.setEnchantments(stack, mutable.toImmutable());
+        EnchantmentHelper.updateEnchantments(stack, mut -> {
+            if (nextLevel > 0) {
+                mut.set(ench, nextLevel);
+            } else {
+                mut.removeIf(h -> h.equals(ench));
+            }
+        });
 
         this.markUpdated();
     }
 
+    // Max level is capped at 50 in Config to prevent the "Bitshift Overflow" bug
     public static long levelToPoints(int level) {
         if (level <= 0)
             return 0L;
@@ -269,7 +288,6 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
      */
     // Suppressed: vanilla ResourceKey/Identifier factory methods lack
     // @Nonnull; outputs are guaranteed non-null
-    @SuppressWarnings("null")
     public void loadLibraryData(@Nonnull LibraryData data, @Nonnull RegistryLookup<Enchantment> lookup) {
         this.points.clear();
         this.maxLevels.clear();
@@ -283,26 +301,33 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     // ── BlockEntity NBT (world save/load) ──────────────────────────────────────
 
     @Override
-    protected void saveAdditional(@Nonnull ValueOutput output) {
+    @SuppressWarnings("null")
+    protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         writeEnchData(output);
     }
 
     @Override
-    @SuppressWarnings("null")
-    protected void loadAdditional(@Nonnull ValueInput input) {
+    @SuppressWarnings({ "null", "deprecation" })
+    protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         readEnchData(input, input.lookup().lookupOrThrow(Registries.ENCHANTMENT));
         this.ensureConfigApplied();
     }
 
-    protected void collectUpdateData(@Nonnull ValueOutput output, @Nonnull HolderLookup.Provider registries) {
-        // Calling super.collectUpdateData is removed as it's not in the base class for this build.
-        // writeEnchData is called for data synchronization.
-        writeEnchData(output);
+    @Override
+    @javax.annotation.Nullable
+    public net.minecraft.network.protocol.Packet<net.minecraft.network.protocol.game.ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
     }
 
+    @Override
+    @Nonnull
     @SuppressWarnings("null")
+    public net.minecraft.nbt.CompoundTag getUpdateTag(@Nonnull HolderLookup.Provider registries) {
+        return this.saveCustomOnly(registries);
+    }
+
     private void writeEnchData(@Nonnull ValueOutput output) {
         output.store("library_data", LibraryData.CODEC, this.toLibraryData());
     }
@@ -366,7 +391,6 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
 
     // Suppressed: vanilla Level.sendBlockUpdated, BlockState, Block.UPDATE_CLIENTS
     // lack @Nonnull
-    @SuppressWarnings("null")
     private void syncToClient() {
         if (this.level != null && !this.level.isClientSide()) {
             this.level.sendBlockUpdated(this.worldPosition, this.getBlockState(), this.getBlockState(),
@@ -454,18 +478,21 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
         }
 
         @Override
-        public int insert(int slot, ItemResource resource, int amount, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+        @SuppressWarnings("null")
+        public int insert(int slot, ItemResource resource, int amount,
+                net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
             if (slot != 0 || amount <= 0 || resource.getItem() != Items.ENCHANTED_BOOK) {
                 return 0;
             }
+            journal.updateSnapshots(tx);
             ItemStack toDeposit = resource.toStack(1);
             EnchLibraryBlockEntity.this.depositBook(toDeposit);
-            EnchLibraryBlockEntity.this.setChanged();
             return 1;
         }
 
         @Override
-        public int extract(int slot, ItemResource resource, int amount, net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
+        public int extract(int slot, ItemResource resource, int amount,
+                net.neoforged.neoforge.transfer.transaction.TransactionContext tx) {
             return 0;
         }
     }

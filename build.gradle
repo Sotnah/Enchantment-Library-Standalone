@@ -10,8 +10,10 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(project.properties.javaVersion)
 
+def targetForgeVersion = project.hasProperty("forgeVersion_${project.properties.mcVersion}") ? project.property("forgeVersion_${project.properties.mcVersion}") : project.findProperty("forgeVersion")
+
 neoForge {
-    version = project.properties.forgeVersion
+    version = targetForgeVersion
 
     mods {
         create("${modid}") {
@@ -49,7 +51,7 @@ tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
             version     : project.version,
             mcVersion   : project.properties.mcVersion,
-            forgeVersion: project.properties.forgeVersion
+            forgeVersion: targetForgeVersion
     ]
     inputs.properties replaceProperties
     filesMatching('META-INF/neoforge.mods.toml') {

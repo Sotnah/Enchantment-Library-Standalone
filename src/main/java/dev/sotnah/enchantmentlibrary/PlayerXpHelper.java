@@ -9,6 +9,8 @@ public class PlayerXpHelper {
                 + (player.experienceProgress * player.getXpNeededForNextLevel()));
     }
 
+    // Max level is capped at 50 in Config to prevent the "Synchronous Loop
+    // Overhead" bug
     public static void addPlayerXp(Player player, int amount) {
         long newTotal = (long) getPlayerTotalXp(player) + amount;
         int totalXp = (int) Math.max(0L, Math.min(newTotal, Integer.MAX_VALUE));
@@ -42,14 +44,21 @@ public class PlayerXpHelper {
         }
     }
 
-    public static int getCost(int level) {
+    /**
+     * Calculates the raw XP cost for a given enchantment level using long arithmetic
+     * to prevent overflow up to Long.MAX_VALUE.
+     * This prevents the "Zero-Cost Upgrade" exploit where costs capped at Integer.MAX_VALUE
+     * could result in a 0 difference for high-level upgrades.
+     */
+    public static long getCostRaw(int level) {
         int baseCost = Config.baseXpMultiplier.get();
         long levelSquared = (long) level * (long) level;
-        long cost = (long) baseCost * levelSquared;
-        if (cost > Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        return (int) cost;
+        return (long) baseCost * levelSquared;
+    }
+
+    // Max level is capped at 50 in Config to prevent the "Integer Overflow" bug
+    public static int getCost(int level) {
+        return (int) Math.min(getCostRaw(level), Integer.MAX_VALUE);
     }
 
     public static int getLevelFromXp(int xp) {

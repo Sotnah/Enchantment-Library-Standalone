@@ -1,6 +1,5 @@
 package dev.sotnah.enchantmentlibrary.block;
 
-import java.util.List;
 import java.util.function.Supplier;
 
 import javax.annotation.Nonnull;
@@ -8,13 +7,10 @@ import javax.annotation.Nullable;
 
 import com.mojang.serialization.MapCodec;
 
-import dev.sotnah.enchantmentlibrary.Config;
 import dev.sotnah.enchantmentlibrary.ModRegistry;
 import dev.sotnah.enchantmentlibrary.component.LibraryData;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionResult;
@@ -22,9 +18,7 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -38,7 +32,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 
 public class EnchLibraryBlock extends HorizontalDirectionalBlock implements EntityBlock {
 
@@ -49,7 +42,6 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
 
     // Suppressed: vanilla BlockBehaviour.Properties, BlockState, DirectionProperty
     // lack @Nonnull
-    @SuppressWarnings("null")
     public EnchLibraryBlock(@Nonnull ResourceKey<Block> blockKey,
             @Nonnull Supplier<? extends BlockEntityType<? extends EnchLibraryBlockEntity>> tileType,
             int maxLevel) {
@@ -64,6 +56,7 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
 
+    @SuppressWarnings("null")
     public static final MapCodec<EnchLibraryBlock> CODEC = com.mojang.serialization.codecs.RecordCodecBuilder
             .mapCodec(inst -> inst.group(
                     com.mojang.serialization.Codec.INT.fieldOf("max_level").forGetter(EnchLibraryBlock::getMaxLevel))
@@ -75,7 +68,8 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
                                 return ModRegistry.BLOCK_ENTITY_TIER2.get();
                             return ModRegistry.BLOCK_ENTITY_TIER1.get();
                         };
-                        // Codec reconstruction: use a placeholder key — registry will assign the real one
+                        // Codec reconstruction: use a placeholder key — registry will assign the real
+                        // one
                         ResourceKey<Block> placeholderKey = maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel
                                 ? ModRegistry.LIBRARY_TIER3.getKey()
                                 : (maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel
@@ -92,7 +86,7 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     }
 
     @Override
-    protected void createBlockStateDefinition(@Nonnull StateDefinition.Builder<Block, BlockState> builder) {
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
     }
 
@@ -106,7 +100,7 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
 
     @Override
     @Nonnull
-    public BlockEntity newBlockEntity(@Nonnull BlockPos pos, @Nonnull BlockState state) {
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         // BlockEntityType.create() is unannotated in vanilla; requireNonNull enforces
         // @Nonnull contract
         BlockEntityType<? extends EnchLibraryBlockEntity> type = java.util.Objects.requireNonNull(this.tileType.get(),
@@ -155,7 +149,8 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
 
     @Override
     @Nonnull
-    public ItemStack getCloneItemStack(@Nonnull LevelReader level, @Nonnull BlockPos pos, @Nonnull BlockState state, boolean includeData, @Nonnull Player player) {
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state, boolean includeData,
+            Player player) {
         BlockEntity be = level.getBlockEntity(pos);
         if (be == null) {
             return new ItemStack(this);
@@ -192,12 +187,28 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     // ── Tooltip ────────────────────────────────────────────────────────────────
 
     public EnchLibraryBlockEntity.Tier getTier() {
-        if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel) return EnchLibraryBlockEntity.Tier.TIER3;
-        if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel) return EnchLibraryBlockEntity.Tier.TIER2;
+        if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER3.defaultMaxLevel)
+            return EnchLibraryBlockEntity.Tier.TIER3;
+        if (this.maxLevel >= EnchLibraryBlockEntity.Tier.TIER2.defaultMaxLevel)
+            return EnchLibraryBlockEntity.Tier.TIER2;
         return EnchLibraryBlockEntity.Tier.TIER1;
     }
 
     public int getMaxLevel() {
         return this.maxLevel;
+    }
+
+    public void appendHoverText(@Nonnull ItemStack stack, @Nonnull net.minecraft.world.item.Item.TooltipContext context,
+            @Nonnull java.util.List<Component> tooltipComponents,
+            @Nonnull net.minecraft.world.item.TooltipFlag tooltipFlag) {
+
+        EnchLibraryBlockEntity.Tier tier = getTier();
+        int tierNum = tier == EnchLibraryBlockEntity.Tier.TIER3 ? 3
+                : (tier == EnchLibraryBlockEntity.Tier.TIER2 ? 2 : 1);
+
+        tooltipComponents.add(
+                Component.translatable("tooltip.enchlib.tier", tierNum).withStyle(net.minecraft.ChatFormatting.GRAY));
+        tooltipComponents.add(Component.translatable("tooltip.enchlib.max_level", getMaxLevel())
+                .withStyle(net.minecraft.ChatFormatting.DARK_GREEN));
     }
 }
