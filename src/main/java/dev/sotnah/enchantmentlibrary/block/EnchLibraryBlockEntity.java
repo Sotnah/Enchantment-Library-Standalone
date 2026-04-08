@@ -251,9 +251,12 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
 
     // Max level is capped at 50 in Config to prevent the "Bitshift Overflow" bug
     public static long levelToPoints(int level) {
-        if (level <= 0)
-            return 0L;
-        return 1L << (level - 1); // 2^(level-1)
+        if (level <= 0) return 0L;
+        // Java long shifts are masked to & 63, so level >= 64 wraps around and produces
+        // incorrect small values. Any level this high would astronomically exceed any
+        // sane maxPoints cap, so return Long.MAX_VALUE and let the caller clamp it.
+        if (level >= 64) return Long.MAX_VALUE;
+        return 1L << (level - 1);
     }
 
     // ── Data Component Conversion ──────────────────────────────────────────────
