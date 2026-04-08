@@ -42,14 +42,14 @@ public class PlayerXpHelper {
         }
     }
 
-    public static int getCost(int level) {
+    public static long getCostRaw(int level) {
         int baseCost = Config.baseXpMultiplier.get();
         long levelSquared = (long) level * (long) level;
-        long cost = (long) baseCost * levelSquared;
-        if (cost > Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        return (int) cost;
+        return (long) baseCost * levelSquared;
+    }
+
+    public static int getCost(int level) {
+        return (int) Math.min(getCostRaw(level), Integer.MAX_VALUE);
     }
 
     public static int getLevelFromXp(int xp) {

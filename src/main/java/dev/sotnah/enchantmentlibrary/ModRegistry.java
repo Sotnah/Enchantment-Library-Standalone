@@ -132,6 +132,19 @@ public final class ModRegistry {
                 MENUS.register(bus);
                 TABS.register(bus);
                 bus.addListener(ModRegistry::registerCapabilities);
+                bus.addListener(ModRegistry::registerPayloads);
+        }
+
+        // Suppressed: EnchSelectionPayload.TYPE and STREAM_CODEC come from vanilla/NeoForge
+        // StreamCodec/CustomPacketPayload APIs that lack @Nonnull
+        @SuppressWarnings("null")
+        private static void registerPayloads(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent event) {
+                net.neoforged.neoforge.network.registration.PayloadRegistrar registrar = event.registrar(EnchantmentLibraryMod.MOD_ID);
+                registrar.playToServer(
+                        dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload.TYPE,
+                        dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload.STREAM_CODEC,
+                        dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload::handleData
+                );
         }
 
         // Suppressed: vanilla Capabilities.ItemHandler.BLOCK and DeferredHolder.get()

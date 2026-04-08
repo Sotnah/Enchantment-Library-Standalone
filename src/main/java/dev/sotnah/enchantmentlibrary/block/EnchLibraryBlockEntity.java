@@ -36,8 +36,12 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import org.slf4j.Logger;
+import com.mojang.logging.LogUtils;
 
 public abstract class EnchLibraryBlockEntity extends BlockEntity {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     // ── Tier definitions (single source of truth) ───────────────────────────
     public enum Tier {
@@ -535,8 +539,13 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
             remainder.shrink(1);
 
             if (!simulate) {
-                ItemStack toDeposit = stack.copyWithCount(1);
-                EnchLibraryBlockEntity.this.depositBook(toDeposit);
+                try {
+                    ItemStack toDeposit = stack.copyWithCount(1);
+                    EnchLibraryBlockEntity.this.depositBook(toDeposit);
+                } catch (Exception e) {
+                    LOGGER.error("Failed to deposit book into library at {}", EnchLibraryBlockEntity.this.worldPosition, e);
+                    return stack;
+                }
             }
 
             return remainder.isEmpty() ? ItemStack.EMPTY : remainder;

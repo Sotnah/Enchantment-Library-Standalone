@@ -43,7 +43,7 @@ public class Config {
 
     // Optimization: Epoch increases only when inventory re-validation is strictly required (tier levels/points or blacklist changes).
     private static final AtomicInteger TIER_CONFIG_EPOCH = new AtomicInteger(0);
-    private static final Set<ResourceLocation> BLACKLIST_CACHE = new HashSet<>();
+    private static volatile Set<ResourceLocation> BLACKLIST_CACHE = Set.of();
 
     /**
      * Immutable snapshot of tier limits to ensure zero overhead on repeated calls.
@@ -187,8 +187,6 @@ public class Config {
         if (id == null) {
             return false;
         }
-        synchronized (BLACKLIST_CACHE) {
-            return BLACKLIST_CACHE.contains(id);
-        }
+        return BLACKLIST_CACHE.contains(id);
     }
 }

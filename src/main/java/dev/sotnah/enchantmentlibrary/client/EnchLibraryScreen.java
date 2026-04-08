@@ -71,6 +71,7 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     private float scrollOffs = 0;
     private boolean scrolling = false;
     private int startIndex = 0;
+    private int lastKnownPointCount = -1;
 
     public EnchLibraryScreen(@Nonnull EnchLibraryMenu menu, @Nonnull Inventory inv, @Nonnull Component title) {
         super(menu, inv, title);
@@ -112,6 +113,25 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         this.addRenderableWidget(this.filter);
 
         this.containerChanged();
+    }
+
+    @Override
+    public void containerTick() {
+        super.containerTick();
+        EnchLibraryBlockEntity tile = this.menu.getTile();
+        if (tile != null) {
+            Object2LongMap<Holder<Enchantment>> points = tile.getPoints();
+            int currentCount = points.size();
+            long currentSum = 0;
+            for (long v : points.values()) {
+                currentSum += v;
+            }
+            int signature = currentCount * 31 + (int) (currentSum ^ (currentSum >>> 32));
+            if (this.lastKnownPointCount != signature) {
+                this.lastKnownPointCount = signature;
+                this.containerChanged();
+            }
+        }
     }
 
     @Override
@@ -501,12 +521,12 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         if (libSlot != null) {
             if (this.minecraft != null && this.minecraft.level != null && this.minecraft.gameMode != null) {
                 var registry = this.minecraft.level.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
-                int id = registry.getId(libSlot.ench.value());
-                if (Screen.hasShiftDown())
-                    id |= EnchLibraryMenu.SHIFT_FLAG;
-                if (Screen.hasControlDown())
-                    id |= EnchLibraryMenu.CTRL_FLAG;
-                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, id);
+                ResourceLocation enchId = registry.getKey(libSlot.ench.value());
+                if (enchId != null) {
+                    boolean shift = Screen.hasShiftDown();
+                    boolean ctrl = Screen.hasControlDown();
+                    net.neoforged.neoforge.network.PacketDistributor.sendToServer(new dev.sotnah.enchantmentlibrary.network.EnchSelectionPayload(enchId, shift, ctrl));
+                }
                 if (this.minecraft.getSoundManager() != null) {
                     this.minecraft.getSoundManager().play(
                             net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
