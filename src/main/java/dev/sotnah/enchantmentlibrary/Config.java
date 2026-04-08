@@ -14,7 +14,8 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
  * Mod configuration manager.
- * Manages snapshots via mod events to prevent tight-coupling and performance bottlenecks.
+ * Manages snapshots via mod events to prevent tight-coupling and performance
+ * bottlenecks.
  */
 @SuppressWarnings({ "deprecation", "null" })
 public class Config {
@@ -41,7 +42,8 @@ public class Config {
     public static final ModConfigSpec.IntValue baseXpMultiplier;
     public static final ModConfigSpec.BooleanValue requireXpForExtraction;
 
-    // Optimization: Epoch increases only when inventory re-validation is strictly required (tier levels/points or blacklist changes).
+    // Optimization: Epoch increases only when inventory re-validation is strictly
+    // required (tier levels/points or blacklist changes).
     private static final AtomicInteger TIER_CONFIG_EPOCH = new AtomicInteger(0);
     private static volatile Set<ResourceLocation> BLACKLIST_CACHE = Set.of();
 
@@ -71,7 +73,7 @@ public class Config {
 
         baseXpMultiplier = BUILDER
                 .comment("Base multiplier for XP extraction cost. Cost = baseXpMultiplier * (level * level).")
-                .defineInRange("baseXpMultiplier", 40, 0, Integer.MAX_VALUE);
+                .defineInRange("baseXpMultiplier", 40, 0, 100000);
 
         enableDisenchantButton = BUILDER
                 .comment("Enables/disables disenchant button functionality.")
@@ -129,7 +131,8 @@ public class Config {
 
     /**
      * Rebuilds configuration snapshots and caches.
-     * Increments the epoch only if critical data (tier limits or backlist) has changed.
+     * Increments the epoch only if critical data (tier limits or backlist) has
+     * changed.
      */
     public static void rebuildCaches() {
         boolean criticalConfigChanged = false;
