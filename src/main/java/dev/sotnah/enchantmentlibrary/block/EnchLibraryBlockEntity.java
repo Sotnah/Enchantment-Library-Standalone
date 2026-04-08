@@ -91,14 +91,10 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
                 continue;
             }
             int rawLevel = entry.getIntValue();
-            // Level and point caps are independent:
-            // - stored max level is capped at tierMaxLevel
-            // - added points = levelToPoints(rawLevel), capped at tierMaxPoints only if it
-            // would exceed it (avoids overflow from astronomically high levels)
             int bookLevel = Math.min(rawLevel, this.getMaxLevel());
 
             long currentPoints = this.points.getLong(ench);
-            long added = levelToPoints(bookLevel);
+            long added = Math.min(levelToPoints(rawLevel), this.getMaxPoints());
             long newPoints = currentPoints + added;
             if (newPoints < 0L)
                 newPoints = this.getMaxPoints(); // overflow guard
@@ -135,14 +131,11 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
                 continue;
             }
             int rawLevel = entry.getIntValue();
-            // Level and point caps are independent:
-            // - stored max level is capped at tierMaxLevel
-            // - added points = levelToPoints(rawLevel), capped at tierMaxPoints only if it
-            // would exceed it
             int enchLevel = Math.min(rawLevel, this.getMaxLevel());
 
             long currentPoints = this.points.getLong(ench);
-            long added = levelToPoints(enchLevel) * count;
+            long pointsPerItem = Math.min(levelToPoints(rawLevel), this.getMaxPoints());
+            long added = pointsPerItem * count;
             long newPoints = currentPoints + added;
             if (newPoints < 0L)
                 newPoints = this.getMaxPoints(); // overflow guard
