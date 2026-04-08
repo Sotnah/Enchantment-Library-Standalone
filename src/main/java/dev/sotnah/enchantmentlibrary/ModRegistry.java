@@ -27,10 +27,8 @@ public final class ModRegistry {
 
         // ── Registers ──────────────────────────────────────────────────────────────
 
-        @SuppressWarnings("null")
         public static final DeferredRegister.Blocks BLOCKS = DeferredRegister
                         .createBlocks(EnchantmentLibraryMod.MOD_ID);
-        @SuppressWarnings("null")
         public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(EnchantmentLibraryMod.MOD_ID);
         @SuppressWarnings("null")
         public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister
@@ -56,7 +54,6 @@ public final class ModRegistry {
                         .register("preserve_library_data",
                                         () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
                                                         dev.sotnah.enchantmentlibrary.loot.PreserveLibraryDataCondition.CODEC));
-
 
         // ── Data Components ────────────────────────────────────────────────────────
 

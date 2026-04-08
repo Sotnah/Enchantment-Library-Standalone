@@ -225,7 +225,8 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
             return false;
         }
 
-        // Disenchant button (-2) - Deposits enchantments from the filter slot into this library
+        // Disenchant button (-2) - Deposits enchantments from the filter slot into this
+        // library
         if (id == DISENCHANT_ID) {
             if (!dev.sotnah.enchantmentlibrary.Config.enableDisenchantButton.get()) {
                 return false;
@@ -421,7 +422,6 @@ public class EnchLibraryMenu extends AbstractContainerMenu {
                     if (e.getLongValue() > 0L)
                         return true;
                     // Keep in list if it's currently in the output book
-                    @SuppressWarnings("null")
                     @Nonnull
                     Holder<Enchantment> ench = e.getKey();
                     return outputEnchants != null && outputEnchants.getLevel(ench) > 0;

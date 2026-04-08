@@ -25,7 +25,6 @@ public record LibraryData(
                 @Nonnull Object2IntMap<ResourceLocation> maxLevels) {
 
         // Suppressed: RecordCodecBuilder and Codec.unboundedMap types lack @Nonnull
-        @SuppressWarnings("null")
         public static final Codec<LibraryData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                         Codec.unboundedMap(ResourceLocation.CODEC, Codec.LONG).fieldOf("points")
                                         .forGetter(d -> d.points),

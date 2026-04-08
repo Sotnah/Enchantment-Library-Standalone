@@ -432,7 +432,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
     @Override
     // Suppressed: vanilla Registries.ENCHANTMENT, SimpleSoundInstance, SoundEvents
     // lack @Nonnull
-    @SuppressWarnings("null")
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         this.scrolling = false;
 
@@ -486,7 +485,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return false;
     }
 
-    @SuppressWarnings("null")
     private boolean handleScrollbarClick(double mouseX, double mouseY, int button) {
         if (mouseX >= this.leftPos + 14 && mouseX < this.leftPos + 18 && mouseY >= this.topPos + 29
                 && mouseY < this.topPos + 132) {
@@ -520,7 +518,6 @@ public class EnchLibraryScreen extends AbstractContainerScreen<EnchLibraryMenu> 
         return false;
     }
 
-    @SuppressWarnings("null")
     private boolean handleFilterRightClick(double mouseX, double mouseY, int button) {
         if (button == 1 && this.filter.isMouseOver(mouseX, mouseY)) {
             this.filter.setValue("");
