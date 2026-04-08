@@ -195,9 +195,11 @@ public class EnchLibraryBlock extends HorizontalDirectionalBlock implements Enti
     @SuppressWarnings("null")
     public void appendHoverText(@Nonnull ItemStack stack, @Nonnull Item.TooltipContext context,
             @Nonnull List<Component> list, @Nonnull TooltipFlag flag) {
-        int currentConfigMaxLevel = Config.getTierLimits(this.getTier()).maxLevel();
-        list.add(Component.translatable("tooltip.enchlib.capacity",
-                Component.literal(String.valueOf(currentConfigMaxLevel))).withStyle(ChatFormatting.GOLD));
+        EnchLibraryBlockEntity.Tier tier = this.getTier();
+        list.add(Component.translatable("tooltip.enchlib.tier", tier.ordinal() + 1).withStyle(ChatFormatting.GRAY));
+
+        int currentConfigMaxLevel = Config.getTierLimits(tier).maxLevel();
+        list.add(Component.translatable("tooltip.enchlib.max_level", currentConfigMaxLevel).withStyle(ChatFormatting.DARK_GREEN));
 
         LibraryData data = stack.get(ModRegistry.LIBRARY_DATA.get());
         if (data != null) {
