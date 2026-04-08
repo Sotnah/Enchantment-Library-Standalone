@@ -90,7 +90,12 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
             if (Config.isBlacklisted(ench)) {
                 continue;
             }
-            int bookLevel = entry.getIntValue();
+            int rawLevel = entry.getIntValue();
+            // Level and point caps are independent:
+            // - stored max level is capped at tierMaxLevel
+            // - added points = levelToPoints(rawLevel), capped at tierMaxPoints only if it
+            // would exceed it (avoids overflow from astronomically high levels)
+            int bookLevel = Math.min(rawLevel, this.getMaxLevel());
 
             long currentPoints = this.points.getLong(ench);
             long added = levelToPoints(bookLevel);
@@ -129,7 +134,12 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
             if (Config.isBlacklisted(ench)) {
                 continue;
             }
-            int enchLevel = entry.getIntValue();
+            int rawLevel = entry.getIntValue();
+            // Level and point caps are independent:
+            // - stored max level is capped at tierMaxLevel
+            // - added points = levelToPoints(rawLevel), capped at tierMaxPoints only if it
+            // would exceed it
+            int enchLevel = Math.min(rawLevel, this.getMaxLevel());
 
             long currentPoints = this.points.getLong(ench);
             long added = levelToPoints(enchLevel) * count;
@@ -237,6 +247,11 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
     public static long levelToPoints(int level) {
         if (level <= 0)
             return 0L;
+        // Java long shifts are masked to & 63, so level >= 64 wraps around and produces
+        // incorrect small values. Any level this high would astronomically exceed any
+        // sane maxPoints cap, so return Long.MAX_VALUE and let the caller clamp it.
+        if (level >= 64)
+            return Long.MAX_VALUE;
         return 1L << (level - 1); // 2^(level-1)
     }
 
@@ -543,7 +558,8 @@ public abstract class EnchLibraryBlockEntity extends BlockEntity {
                     ItemStack toDeposit = stack.copyWithCount(1);
                     EnchLibraryBlockEntity.this.depositBook(toDeposit);
                 } catch (Exception e) {
-                    LOGGER.error("Failed to deposit book into library at {}", EnchLibraryBlockEntity.this.worldPosition, e);
+                    LOGGER.error("Failed to deposit book into library at {}", EnchLibraryBlockEntity.this.worldPosition,
+                            e);
                     return stack;
                 }
             }
